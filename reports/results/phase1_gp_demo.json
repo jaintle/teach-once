@@ -1,0 +1,12 @@
+{
+  "phase": 1,
+  "section": "III-B",
+  "seed": 0,
+  "n_demos": 60,
+  "rmse_exact_train": 0.046950568973620564,
+  "rmse_exact_test": 0.04992460843758838,
+  "rmse_svgp_train": 0.046939926823695265,
+  "rmse_svgp_test": 0.05360713741555248,
+  "passed": true,
+  "timestamp": "2026-05-11T04:09:25"
+}
