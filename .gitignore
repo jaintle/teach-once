@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.coverage
+reports/figures/*.png
+reports/figures/*.pdf
+reports/results/*.csv
+reports/results/*.npz
+data/demonstrations/*.npz
+!reports/figures/.gitkeep
+!reports/results/.gitkeep
+!data/demonstrations/.gitkeep
