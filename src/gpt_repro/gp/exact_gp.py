@@ -49,10 +49,14 @@ def _to_1d_tensor(y: ArrayLike, dtype: torch.dtype, device: torch.device) -> tor
 
 
 class _ExactGPModel(gpytorch.models.ExactGP):
-    """Internal gpytorch ExactGP with constant mean and ARD-RBF kernel.
+    """Internal gpytorch ExactGP with selectable mean and an ARD-RBF kernel.
 
-    Implements the prior used in Sec. III-B. We use a ConstantMean (trainable)
-    and a ScaleKernel wrapping an RBFKernel with one length-scale per input
+    Implements the prior used in Sec. III-B. We support a ConstantMean
+    (trainable) — the standard GP default — or a ZeroMean, which Sec. III-A
+    explicitly requires for the dynamical-system policy ("it is safer to have
+    a zero mean prior, such that the robot does not attempt to do any
+    movement if there is no significant evidence"). The covariance is a
+    ScaleKernel wrapping an RBFKernel with one length-scale per input
     dimension (ARD), which is the standard squared-exponential kernel of the
     paper.
     """
@@ -62,9 +66,17 @@ class _ExactGPModel(gpytorch.models.ExactGP):
         train_x: torch.Tensor,
         train_y: torch.Tensor,
         likelihood: gpytorch.likelihoods.GaussianLikelihood,
+        mean_type: str = "constant",
     ) -> None:
         super().__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
+        if mean_type == "zero":
+            self.mean_module = gpytorch.means.ZeroMean()
+        elif mean_type == "constant":
+            self.mean_module = gpytorch.means.ConstantMean()
+        else:
+            raise ValueError(
+                f"mean_type must be 'zero' or 'constant', got {mean_type!r}"
+            )
         d = train_x.shape[-1]
         self.covar_module = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=d)
@@ -96,6 +108,12 @@ class ExactGPRegressor:
         for numerical stability of the variance-derivative computation.
     device : str or torch.device, optional
         Defaults to CPU.
+    mean : {"constant", "zero"}, optional
+        Mean function of the GP prior. ``"constant"`` (default) uses a
+        trainable :class:`gpytorch.means.ConstantMean`, which is appropriate
+        for generic regression (Sec. III-B). ``"zero"`` uses
+        :class:`gpytorch.means.ZeroMean` and is required by the dynamical
+        system policy in Sec. III-A.
     """
 
     def __init__(
@@ -104,11 +122,15 @@ class ExactGPRegressor:
         lr: float = 0.1,
         dtype: torch.dtype = torch.float64,
         device: Optional[Union[str, torch.device]] = None,
+        mean: str = "constant",
     ) -> None:
         self.n_iter_default = int(n_iter_default)
         self.lr = float(lr)
         self._dtype = dtype
         self._device = torch.device(device) if device is not None else torch.device("cpu")
+        if mean not in {"constant", "zero"}:
+            raise ValueError(f"mean must be 'constant' or 'zero', got {mean!r}")
+        self._mean_type = mean
         self.model: Optional[_ExactGPModel] = None
         self.likelihood: Optional[gpytorch.likelihoods.GaussianLikelihood] = None
         self._X_train: Optional[torch.Tensor] = None
@@ -140,7 +162,7 @@ class ExactGPRegressor:
         likelihood = gpytorch.likelihoods.GaussianLikelihood().to(
             device=self._device, dtype=self._dtype
         )
-        model = _ExactGPModel(X_t, y_t, likelihood).to(
+        model = _ExactGPModel(X_t, y_t, likelihood, mean_type=self._mean_type).to(
             device=self._device, dtype=self._dtype
         )
 

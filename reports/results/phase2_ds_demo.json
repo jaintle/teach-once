@@ -1,0 +1,13 @@
+{
+  "phase": 2,
+  "section": "III-A",
+  "seed": 0,
+  "n_demos": 100,
+  "train_rmse": 0.0055444243027118366,
+  "rollout_closest_approach": 0.31210205215945447,
+  "rollout_closest_step": 41,
+  "on_demo_mean_std": 0.005099470176862884,
+  "ood_mean_std": 3.0194278289100622,
+  "passed": true,
+  "timestamp": "2026-05-11T04:24:26"
+}
