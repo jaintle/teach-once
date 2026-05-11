@@ -152,3 +152,100 @@ Open questions / deferred work:
 - Rollout uses simple forward-Euler integration. RK4 would be
   straightforward to drop in if a later phase needs tighter
   trajectory accuracy.
+
+---
+
+## Phase 3 — Linear transportation γ via SVD (Sec. IV-A)
+
+Date: 2026-05-11
+Paper section(s) implemented: Sec. IV-A (Eqs. 8–11). Sec. IV (Eq. 7)
+is implemented partially — the linear component γ; the non-linear
+residual ψ is deferred to Phase 4.
+
+Files added/changed:
+- `src/gpt_repro/transport/linear.py` — `LinearTransport` class and
+  the module-level `kabsch_svd_rotation` helper (with reflection fix).
+- `src/gpt_repro/transport/__init__.py` — re-exports both.
+- `src/gpt_repro/viz/transport_2d.py` — `plot_distribution_match`
+  (Fig. 3 panel 1) and `plot_grid_under_transform` (Fig. 3 panels 2-4,
+  parameterized by the transform function so Phase 4 reuses it).
+- `src/gpt_repro/viz/__init__.py` — re-exports both new viz helpers.
+- `tests/test_linear_transport.py` — 7 tests (identity, translation,
+  90° rotation, reflection-fix, jacobian, 3D, input validation).
+- `scripts/figure3_linear.py` — Fig. 3 panels 1-3, full CLI, prints
+  recovered A / det / centroid shift / residual, saves PNG+PDF and
+  `reports/results/phase3_linear.json`.
+- `scripts/smoke_phase3.py` — tiny version of figure3_linear (12
+  paired points) with explicit pass/fail checks on figure existence,
+  residual finiteness, and det(A) ≈ +1.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- `kabsch_svd_rotation` implements Eqs. (9)-(10) with the standard
+  reflection fix; for reflected inputs the fix triggers and the
+  returned A is a proper rotation (det = +1).
+- `LinearTransport.fit / transform` implement Eq. (11) and recover
+  pure 2D rotations and translations to floating-point precision.
+- 3D case also works (validated against a uniformly random
+  proper-rotation in SO(3)), so Sec. IV-D orientation transport in
+  Phase 4 can lean on this.
+- `LinearTransport.jacobian` returns A both unbatched (d, d) and
+  batched (M, d, d) — Phase 4's `J_phi = J_psi + A` chain rule will
+  plug in directly.
+- Fig. 3 partial: panels 1 (distribution match), 2 (source grid),
+  3 (linear transformation) render correctly. Recovered A on the
+  default seed is
+      [[ 0.8747 -0.4846]
+       [ 0.4846  0.8747]],
+  det = 1.000000, centroid shift = [1.6117, -0.2686], mean residual
+  ‖T - γ(S)‖₂/N = 0.0465. The residual is non-zero because we
+  intentionally inject a small (amplitude 0.07) deterministic
+  non-linear perturbation to motivate the Phase-4 ψ.
+- `pytest -q` → 18 passed (5 Phase 1 + 6 Phase 2 + 7 Phase 3).
+
+What was tricky:
+- The recovered A on the figure-script seed (0.8747, 0.4846) is not
+  identical to the synthetic ground-truth R (cos 0.55, sin 0.55) =
+  (0.8525, 0.5227). This is expected: the SVD solves for the closest
+  rigid transform to *(S, T)* including the non-linear perturbation,
+  not to *(S, R·S+t)*. Distinguishing these two quantities is the
+  whole reason Phase 4 exists. Recorded both numbers side-by-side in
+  the printed output and in `reports/results/phase3_linear.json`.
+- numpy returns `Vt = V^T` from `linalg.svd`, so the canonical
+  "A = V U^T" of the paper becomes `A = Vt.T @ U.T` in code; this
+  trips a lot of implementations.
+
+Math / equation references implemented:
+- Eq. (8) — centered source / target labels: handled inline in
+  `LinearTransport.fit`.
+- Eq. (9) — SVD of the cross-covariance: docstring cites it in
+  `kabsch_svd_rotation`.
+- Eq. (10) — `A = V U^T` with reflection fix: same function.
+- Eq. (11) — `γ(x) = A(x - S̄) + T̄`: `LinearTransport.transform`.
+- Eq. (7) — `ϕ = γ + ψ ∘ γ`: ψ is intentionally absent in this
+  phase. Where `ϕ` would appear downstream, only γ is wired up
+  for now.
+
+Numerical sanity checks passed:
+- Identity recovery when S == T (atol=1e-6).
+- Pure translation: A = I, γ(X) = X + t.
+- Pure 90° rotation: A matches analytic rotation to 1e-6, det = +1.
+- Reflection fix flagged when (and only when) the target differs
+  from the source by an improper isometry; final det(A) = +1.
+- Jacobian equals A; batched form has shape (M, d, d) with every
+  slice equal to A.
+- 3D rotation recovery to 1e-6.
+- Input validation: mismatched shapes, N < d, and d ∉ {2, 3} all
+  raise `ValueError`; calling `transform` before `fit` raises
+  `RuntimeError`.
+
+Open questions / deferred work:
+- Panel 4 of Fig. 3 ("GP Transportation") requires the non-linear
+  residual ψ from Sec. IV-B. It is deliberately deferred to Phase 4,
+  where the same `plot_grid_under_transform(transform_fn=...)` helper
+  will be reused with `transform_fn = phi.transform`.
+- Eqs. (13), (15), and the stiffness / damping transports of
+  Sec. IV-C / IV-D are not yet implemented; they all need J(x) and
+  will reuse `LinearTransport.jacobian` as the linear part.
+- No epistemic-uncertainty propagation yet (Eqs. 17-18) — that
+  follows the GP-residual machinery, so also Phase 4.
