@@ -171,6 +171,16 @@ class GPDynamicalSystem:
             return means, stds
         return means
 
+    def predict_with_std(self, X_star: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+        """Convenience alias for ``predict(X_star, return_std=True)``.
+
+        Added in Phase 5 so Sec. IV-E's uncertainty-propagation code
+        (:func:`gpt_repro.transport.uncertainty.total_velocity_variance`)
+        can read the per-axis epistemic std of the refit policy ``f̂``
+        without the boolean-flag dance.
+        """
+        return self.predict(X_star, return_std=True)
+
     # ------------------------------------------------------------------
     # Rollout
     # ------------------------------------------------------------------

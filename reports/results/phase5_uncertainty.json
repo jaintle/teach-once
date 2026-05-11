@@ -1,0 +1,14 @@
+{
+  "mean_transport_std": 3.628441281677745,
+  "max_transport_std": 6.048341168823896,
+  "mean_epistemic_std": 0.8012480870030286,
+  "max_epistemic_std": 2.806806693325465,
+  "mean_total_std": 3.7799641910076205,
+  "max_total_std": 6.2621068401211675,
+  "median_transport_std": 3.610307580162913,
+  "ood_threshold": 7.220615160325826,
+  "ood_fraction": 0.0,
+  "n_grid": 30,
+  "n_demos": 60,
+  "seed": 0
+}

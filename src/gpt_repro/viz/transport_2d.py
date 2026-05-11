@@ -270,17 +270,32 @@ def plot_phi_scheme(
 
     # Panel (c) — transported demo + target DS field.
     ax_c = ax_grid[2]
+    # Phase-5 hook: optionally override the field-color std and shade
+    # the transported-demo trajectory with the propagated Σ_x̂ band.
+    overlay = uncertainty_overlay or {}
+    field_total_std_fn = overlay.get("field_total_std_fn")
+    demo_xhat_std_scalar = overlay.get("demo_xhat_std_scalar")
     if ds_target is not None:
         plot_vector_field(
             ds_target,
             x_range=x_range_target, y_range=y_range_target,
             n_grid=16, ax=ax_c, cmap_by_std=True,
             demo={"x": demo_x_hat},
+            std_fn=field_total_std_fn,
+            cbar_label=(
+                "total std  ‖σ_total(x̂)‖"
+                if field_total_std_fn is not None
+                else None
+            ),
         )
     else:
         ax_c.plot(demo_x_hat[:, 0], demo_x_hat[:, 1], "ro", ms=3)
         ax_c.set_xlim(x_range_target); ax_c.set_ylim(y_range_target)
         ax_c.set_aspect("equal", adjustable="box")
+    if demo_xhat_std_scalar is not None:
+        _draw_trajectory_uncertainty_band(
+            ax_c, demo_x_hat, np.asarray(demo_xhat_std_scalar)
+        )
     ax_c.set_title("(c) transported demo x̂ + DS f̂")
 
     # Panel (d) — target distribution.
@@ -292,8 +307,174 @@ def plot_phi_scheme(
     ax_d.set_title("(d) target distribution T")
     ax_d.grid(True, alpha=0.3)
 
-    # TODO(phase5): wire `uncertainty_overlay` to shade the target-frame
-    # panels with the propagated GP uncertainty from Eqs. (17)–(18).
-    _ = uncertainty_overlay  # explicit no-op for now
+    # Phase-5 hooks (field colour, demo band) are wired above; nothing
+    # else needs to be done here.
 
     return ax_grid
+
+
+def _draw_trajectory_uncertainty_band(
+    ax: plt.Axes,
+    path: np.ndarray,
+    std_scalar: np.ndarray,
+    color: str = "tab:orange",
+    alpha: float = 0.25,
+) -> None:
+    """Shade a ±2·std band of half-width ``std_scalar`` around a 2D path.
+
+    Width is taken perpendicular to the local tangent of the polyline,
+    so the band traces the demo trajectory in 2D. Used by Phase 5's
+    transported-demo panel to visualize Σ_x̂ along the trajectory.
+    """
+    path = np.asarray(path)
+    std_scalar = np.asarray(std_scalar).reshape(-1)
+    if path.ndim != 2 or path.shape[1] != 2:
+        raise ValueError(f"path must be (N, 2); got {path.shape}")
+    if std_scalar.shape[0] != path.shape[0]:
+        raise ValueError(
+            f"std_scalar length {std_scalar.shape[0]} must equal path length "
+            f"{path.shape[0]}"
+        )
+    # Local tangents (forward difference, replicated at the last point).
+    tangents = np.diff(path, axis=0)
+    tangents = np.concatenate([tangents, tangents[-1:]], axis=0)
+    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    tangents = tangents / np.maximum(norms, 1e-12)
+    # 90° rotation gives the in-plane normal.
+    normals = np.stack([-tangents[:, 1], tangents[:, 0]], axis=1)
+    width = 2.0 * std_scalar
+    upper = path + normals * width[:, None]
+    lower = path - normals * width[:, None]
+    poly_x = np.concatenate([upper[:, 0], lower[::-1, 0]])
+    poly_y = np.concatenate([upper[:, 1], lower[::-1, 1]])
+    ax.fill(poly_x, poly_y, color=color, alpha=alpha,
+            linewidth=0.0, label="±2 σ Σ_x̂ band", zorder=2)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Fig. 6 3D uncertainty surfaces (Sec. IV-E, Eqs. 16–18)
+# ---------------------------------------------------------------------------
+def plot_uncertainty_field(
+    X_grid: np.ndarray,
+    std_field: np.ndarray,
+    ax: Optional[Any] = None,
+    title: Optional[str] = None,
+    vmax: Optional[float] = None,
+    cmap: str = "inferno",
+):
+    """3D surface plot of a scalar std field over a 2D mesh.
+
+    Reproduces the look of Fig. 6 of Franzese et al. (2024): each pixel
+    of the (G × G) mesh becomes a surface element whose height is the
+    scalar std at that point, color-mapped by the same height.
+
+    Parameters
+    ----------
+    X_grid : (G, G, 2) meshgrid of (x, y) coordinates.
+    std_field : (G, G) scalar std at each grid point.
+    ax : optional matplotlib 3D Axes. If None, one is created.
+    title : optional axes title.
+    vmax : optional shared z / color upper bound (for cross-panel comparison).
+    cmap : matplotlib colormap name (warm by default).
+
+    Returns
+    -------
+    (ax, surf) tuple — the 3D Axes and the Poly3DCollection from
+    ``plot_surface``, so the caller can wire a colorbar.
+    """
+    # Local import: mpl_toolkits is only needed when this helper is called.
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers projection)
+
+    X_grid = np.asarray(X_grid)
+    std_field = np.asarray(std_field)
+    if X_grid.ndim != 3 or X_grid.shape[-1] != 2:
+        raise ValueError(f"X_grid must be (G, G, 2); got {X_grid.shape}")
+    if std_field.shape != X_grid.shape[:2]:
+        raise ValueError(
+            f"std_field shape {std_field.shape} must match X_grid[:2] {X_grid.shape[:2]}"
+        )
+
+    if ax is None:
+        fig = plt.figure(figsize=(5.5, 4.5))
+        ax = fig.add_subplot(111, projection="3d")
+    xs = X_grid[..., 0]
+    ys = X_grid[..., 1]
+    z_high = vmax if vmax is not None else float(std_field.max())
+    surf = ax.plot_surface(
+        xs, ys, std_field,
+        cmap=cmap, vmin=0.0, vmax=z_high,
+        linewidth=0, antialiased=True,
+    )
+    ax.set_xlabel("X [m]")
+    ax.set_ylabel("Y [m]")
+    ax.set_zlabel("std [m/s]")
+    ax.set_zlim(0.0, z_high if z_high > 0 else 1.0)
+    if title:
+        ax.set_title(title)
+    return ax, surf
+
+
+def plot_uncertainty_triptych(
+    Xg: np.ndarray,
+    std_transport: np.ndarray,
+    std_epistemic: np.ndarray,
+    std_total: np.ndarray,
+    titles: Optional[Tuple[str, str, str]] = None,
+    out_path: Optional[Any] = None,
+    suptitle: Optional[str] = None,
+    cmap: str = "inferno",
+):
+    """Three side-by-side 3D surfaces — reproduces the layout of Fig. 6.
+
+    Parameters
+    ----------
+    Xg : (G, G, 2) shared meshgrid for all three surfaces.
+    std_transport, std_epistemic, std_total : (G, G) scalar std fields
+        corresponding to Σ_x̂, Σ_f̂, Σ_total respectively (after L2-norm
+        reduction across output dims).
+    titles : optional triple of panel titles. Defaults to the paper's
+        Fig. 6 labels.
+    out_path : optional path-like — if provided the figure is saved
+        (PNG at 300 dpi).
+    suptitle : optional figure-level title.
+    cmap : matplotlib colormap name.
+
+    Returns
+    -------
+    fig : matplotlib Figure.
+    """
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    if titles is None:
+        titles = (
+            "Transportation Uncertainty",
+            "Epistemic Uncertainty",
+            "Total Uncertainty",
+        )
+    vmax = float(max(
+        np.max(std_transport), np.max(std_epistemic), np.max(std_total)
+    ))
+    vmax = vmax if vmax > 0 else 1.0
+
+    fig = plt.figure(figsize=(15.5, 5.4))
+    surf_last = None
+    for i, (std_field, title) in enumerate(
+        zip([std_transport, std_epistemic, std_total], titles)
+    ):
+        ax = fig.add_subplot(1, 3, i + 1, projection="3d")
+        _, surf_last = plot_uncertainty_field(
+            Xg, std_field, ax=ax, title=title, vmax=vmax, cmap=cmap
+        )
+    if surf_last is not None:
+        cbar = fig.colorbar(
+            surf_last, ax=fig.axes, shrink=0.55, pad=0.04, location="right",
+        )
+        cbar.set_label("std [m/s]")
+    if suptitle is not None:
+        fig.suptitle(suptitle, y=0.99)
+    if out_path is not None:
+        fig.savefig(str(out_path), dpi=300)
+        from pathlib import Path
+        Path(out_path).with_suffix(".pdf")
+        fig.savefig(str(Path(out_path).with_suffix(".pdf")))
+    return fig

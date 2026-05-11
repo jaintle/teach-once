@@ -27,6 +27,8 @@ def plot_vector_field(
     rollout: Optional[np.ndarray] = None,
     cmap: str = "hot",
     arrow_scale: Optional[float] = None,
+    std_fn=None,
+    cbar_label: Optional[str] = None,
 ) -> plt.Axes:
     """Plot the velocity field predicted by a fitted DS policy.
 
@@ -73,15 +75,26 @@ def plot_vector_field(
     V = mean[:, 1]
 
     if cmap_by_std:
-        # Euclidean norm of per-axis std → scalar uncertainty per arrow.
-        C = np.linalg.norm(std, axis=1)
+        # Euclidean norm of per-axis std → scalar uncertainty per arrow,
+        # unless the caller provides an explicit ``std_fn`` (used by
+        # Phase 5 to color arrows by Σ_total rather than ds-epistemic).
+        if std_fn is not None:
+            C = np.asarray(std_fn(grid)).reshape(-1)
+            if C.shape[0] != grid.shape[0]:
+                raise ValueError(
+                    f"std_fn must return shape ({grid.shape[0]},); got {C.shape}"
+                )
+            default_label = "total std  ‖σ_total(x)‖"
+        else:
+            C = np.linalg.norm(std, axis=1)
+            default_label = "predicted std  ‖σ(x)‖"
         q = ax.quiver(
             XX.ravel(), YY.ravel(), U, V, C,
             cmap=cmap, scale=arrow_scale, width=0.003,
             angles="xy", pivot="mid",
         )
         cbar = plt.colorbar(q, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("predicted std  ‖σ(x)‖")
+        cbar.set_label(cbar_label if cbar_label is not None else default_label)
     else:
         ax.quiver(
             XX.ravel(), YY.ravel(), U, V,

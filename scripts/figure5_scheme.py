@@ -1,24 +1,20 @@
-"""Phase 4 — Sec. IV-C: full Fig. 5 transportation scheme.
+"""Phase 5 — Sec. IV-E: Fig. 5 with propagated transportation uncertainty.
 
-Reproduces the 2×2 schematic of Fig. 5:
+Same setup as Phase 4's Fig. 5 (letter-C demo on a flat source surface,
+transported to a curved target surface, source / target DSes), now with
+the two uncertainty-shading hooks that Phase 4 left as TODOs:
 
-* (a) top-left  — source demonstration ``x`` and its source-frame DS ``f``.
-* (b) top-right — source distribution ``S`` (the flat surface).
-* (c) bottom-left — transported demonstration ``x̂`` and the refit
-  target-frame DS ``f̂``.
-* (d) bottom-right — target distribution ``T`` (the curved surface).
+* The transported-demo trajectory in panel (c) gets a ±2 σ band whose
+  half-width is ``sqrt(trace(Σ_x̂))`` at each demo point — the
+  transportation uncertainty from **Eq. (17)**.
+* The transported vector field's arrow colors encode the **total**
+  std from **Eq. (18)** (Σ_total = Σ_f̂ + Σ_x̂) instead of just Σ_f̂.
 
-Steps:
+Both reductions use the L2 norm of the per-axis std vector at each
+query point (equivalently :math:`\\sqrt{\\mathrm{trace}(\\Sigma)}`).
 
-1. Build a small letter-C demonstration (Phase 2).
-2. Build paired flat / curved 1-D surfaces in 2-D (Phase 2).
-3. Fit :class:`PolicyTransport` on ``(S=flat, T=curved)``.
-4. Fit a source-frame :class:`GPDynamicalSystem` on the demo's
-   ``(x, ẋ)``.
-5. Transport the demo: ``x̂ = ϕ(x)``, ``ẋ̂ = J(x) ẋ``.
-6. Fit a target-frame :class:`GPDynamicalSystem` on ``(x̂, ẋ̂)`` to obtain
-   the transported policy ``f̂`` (Sec. IV-C, the f̂ box in Fig. 4).
-7. Draw the four-panel figure via :func:`plot_phi_scheme`.
+Phase-4 output ``phase4_fig5_scheme.png`` is not touched; this script
+now writes ``phase5_fig5_full.png``.
 
 CLI flags (per CLAUDE.md):
 
@@ -51,7 +47,11 @@ from gpt_repro.policies import (  # noqa: E402
     make_letter_C_demo,
     make_surface_2d,
 )
-from gpt_repro.transport import PolicyTransport  # noqa: E402
+from gpt_repro.transport import (  # noqa: E402
+    PolicyTransport,
+    total_velocity_variance,
+    transportation_velocity_variance,
+)
 from gpt_repro.utils import set_global_seed  # noqa: E402
 from gpt_repro.viz import plot_phi_scheme  # noqa: E402
 
@@ -65,6 +65,31 @@ def _save_metadata(
         f"timestamp={_dt.datetime.now().isoformat(timespec='seconds')}"
     )
     fig.text(0.5, 0.005, footer, ha="center", fontsize=7, color="grey")
+
+
+def _build_std_total_fn(pt: PolicyTransport, ds_src, ds_tgt):
+    """Return a callable mapping target-frame queries to scalar total std.
+
+    At each target-frame query x̂:
+      1. Take the source-frame preimage via the *linear* inverse of γ
+         (cheap and unambiguous; ψ→0 OOD so this is a good approximation).
+      2. Read the source-frame velocity ẋ = f(x).
+      3. Sum Σ_x̂(x, ẋ) + Σ_f̂(x̂) per Eq. (18).
+      4. Reduce per-axis variances to a scalar std via
+         ``sqrt(Σ_k var[k]) = ||std||_2``.
+    """
+    A_inv = np.linalg.inv(pt.gamma.A)
+    S_bar = pt.gamma.S_bar
+    T_bar = pt.gamma.T_bar
+
+    def fn(X_tgt: np.ndarray) -> np.ndarray:
+        X_tgt = np.asarray(X_tgt)
+        X_src = (X_tgt - T_bar) @ A_inv.T + S_bar
+        Xdot_src, _ = ds_src.predict_with_std(X_src)
+        Sigma_total = total_velocity_variance(ds_tgt, pt, X_src, Xdot_src)
+        return np.sqrt(Sigma_total.sum(axis=1))
+
+    return fn
 
 
 def make_figure(
@@ -85,12 +110,12 @@ def make_figure(
     T_surface = make_surface_2d("curved", n_points=n_source_points,
                                 x_range=(-1.4, 1.4), amplitude=0.5)
 
-    # 3. Policy transport.
+    # 3. Policy transport (γ + ψ).
     pt = PolicyTransport(n_iter_default=n_iter_gp + 100, lr=0.1).fit(
         S_surface, T_surface
     )
 
-    # 4. Source DS.
+    # 4. Source DS f.
     ds_src = GPDynamicalSystem(n_iter_default=n_iter_gp, lr=0.1).fit(
         demo["x"], demo["xdot"]
     )
@@ -99,10 +124,19 @@ def make_figure(
     x_hat = pt.transform(demo["x"])
     xdot_hat = pt.transform_velocity(demo["x"], demo["xdot"])
 
-    # 6. Target DS refit on transported labels (the f̂ box of Fig. 4).
+    # 6. Target DS f̂ refit on transported labels.
     ds_tgt = GPDynamicalSystem(n_iter_default=n_iter_gp, lr=0.1).fit(
         x_hat, xdot_hat
     )
+
+    # 7. Phase-5 uncertainty hooks.
+    #    Per-demo transportation std (scalar = sqrt(trace(Σ_x̂))).
+    Sigma_xhat_demo = transportation_velocity_variance(
+        pt, demo["x"], demo["xdot"]
+    )
+    demo_xhat_std_scalar = np.sqrt(Sigma_xhat_demo.sum(axis=1))
+    #    Vector-field total-std callable (scalar = sqrt(trace(Σ_total))).
+    std_total_fn = _build_std_total_fn(pt, ds_src, ds_tgt)
 
     # Diagnostics.
     fit_err = float(np.max(np.linalg.norm(pt.transform(S_surface) - T_surface, axis=1)))
@@ -112,8 +146,6 @@ def make_figure(
         fig, axes = plt.subplots(2, 2, figsize=(11.5, 10.0))
         ax_grid = list(axes.flatten())
 
-        # Use the same plot extents as in the demo+surface bounding boxes,
-        # so the (a)/(b) and (c)/(d) panels share scale.
         margin = 0.5
         src_pts = np.vstack([demo["x"], S_surface])
         x_range_src = (
@@ -143,22 +175,26 @@ def make_figure(
             ds_target=ds_tgt,
             x_range_source=x_range_src, y_range_source=y_range_src,
             x_range_target=x_range_tgt, y_range_target=y_range_tgt,
+            uncertainty_overlay={
+                "demo_xhat_std_scalar": demo_xhat_std_scalar,
+                "field_total_std_fn": std_total_fn,
+            },
         )
 
-        # Overlay surface curves for visual context.
+        # Surface curves for visual context.
         ax_grid[1].plot(S_surface[:, 0], S_surface[:, 1], "-",
                         color="tab:blue", alpha=0.5, lw=1.0)
         ax_grid[3].plot(T_surface[:, 0], T_surface[:, 1], "-",
                         color="tab:red", alpha=0.5, lw=1.0)
 
         fig.suptitle(
-            "Phase 4 — Sec. IV-C: Transportation of demo and dynamics",
+            "Phase 5 — Sec. IV-E: Demo + DS transport with propagated uncertainty",
             y=0.99,
         )
-        _save_metadata(fig, section="IV-C", seed=seed,
+        _save_metadata(fig, section="IV-E", seed=seed,
                        n_demos=n_demos, n_source=n_source_points)
         fig.tight_layout(rect=(0, 0.03, 1, 0.96))
-        fig_path = out_dir / "phase4_fig5_scheme.png"
+        fig_path = out_dir / "phase5_fig5_full.png"
         fig.savefig(fig_path, dpi=300)
         fig.savefig(fig_path.with_suffix(".pdf"))
         plt.close(fig)
@@ -166,6 +202,7 @@ def make_figure(
     return {
         "fig_path": fig_path,
         "fit_max_err": fit_err,
+        "demo_xhat_std_scalar": demo_xhat_std_scalar,
         "n_demos": n_demos,
         "n_source_points": n_source_points,
         "seed": seed,
@@ -190,6 +227,10 @@ def main() -> int:
         save=True,
     )
     print(f"max ‖ϕ(S) - T‖ at surface points : {res['fit_max_err']:.6e}")
+    print(f"mean Σ_x̂ scalar over demo        : "
+          f"{float(res['demo_xhat_std_scalar'].mean()):.4f}")
+    print(f"max  Σ_x̂ scalar over demo        : "
+          f"{float(res['demo_xhat_std_scalar'].max()):.4f}")
     print(f"Saved figure: {res['fig_path']}")
     return 0
 

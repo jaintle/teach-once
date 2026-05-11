@@ -184,3 +184,45 @@ class GPNonlinearResidual:
             _, _, dmean, _ = gp.predict_with_derivative(X_arr)
             J[:, k, :] = dmean
         return J
+
+    def predict_derivative(
+        self, X_star: ArrayLike
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        r"""Analytical mean and per-axis std of the Jacobian of ψ — Eq. (16).
+
+        Stacks :meth:`ExactGPRegressor.predict_derivative` across output
+        dimensions. For each test point ``X_star[m]``:
+
+        * ``dmu[m, k, j]    = E[∂ψ_k/∂γ_j]`` at ``X_star[m]``.
+        * ``dsigma[m, k, j] = std(∂ψ_k/∂γ_j)`` at ``X_star[m]``.
+
+        Used by :func:`gpt_repro.transport.uncertainty.
+        transportation_velocity_variance` (Eq. 17). Off-diagonal
+        covariances between gradient components are ignored — Sec. IV-E
+        only uses the per-element variance.
+
+        Parameters
+        ----------
+        X_star : (M, d) array (linearly-aligned inputs γ(X)).
+
+        Returns
+        -------
+        dmu    : (M, d, d) array.
+        dsigma : (M, d, d) array — non-negative element-wise.
+        """
+        self._check_fit()
+        X_arr = np.asarray(X_star, dtype=float)
+        if X_arr.ndim == 1:
+            X_arr = X_arr[None, :]
+        if X_arr.ndim != 2 or X_arr.shape[1] != self._d:
+            raise ValueError(
+                f"X_star must be (M, {self._d}); got shape {X_arr.shape}"
+            )
+        M = X_arr.shape[0]
+        dmu = np.empty((M, self._d, self._d))
+        dsigma = np.empty((M, self._d, self._d))
+        for k, gp in enumerate(self._gps):
+            dm, ds = gp.predict_derivative(X_arr)
+            dmu[:, k, :] = dm
+            dsigma[:, k, :] = ds
+        return dmu, dsigma

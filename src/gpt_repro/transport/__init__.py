@@ -13,6 +13,10 @@ from gpt_repro.transport.policy_transport import (
     PolicyTransport,
     _nearest_proper_rotation,
 )
+from gpt_repro.transport.uncertainty import (
+    total_velocity_variance,
+    transportation_velocity_variance,
+)
 
 __all__ = [
     "LinearTransport",
@@ -20,4 +24,6 @@ __all__ = [
     "GPNonlinearResidual",
     "PolicyTransport",
     "_nearest_proper_rotation",
+    "transportation_velocity_variance",
+    "total_velocity_variance",
 ]

@@ -384,3 +384,156 @@ Open questions / deferred work:
   `predict_with_derivative` (Phase 1) already returns the mean
   gradient via autograd, so the residual Jacobian is built directly
   on top of it without any new tensor-returning API.
+
+---
+
+## Phase 5 — Transportation + epistemic uncertainty propagation (Sec. IV-E)
+
+Date: 2026-05-11
+Paper section(s) implemented:
+- Sec. IV-E  Eq. (16)  GP gradient mean and variance (analytical,
+  using the RBF kernel's K10 / K11 derivatives, ref. [26]).
+- Sec. IV-E  Eq. (17)  Σ_x̂ = Var(J ẋ)  (weighted-sum-of-Gaussians, ref. [30]).
+- Sec. IV-E  Eq. (18)  Σ_total = Σ_f̂ + Σ_x̂  (heteroscedastic GP, ref. [31]).
+
+Files added/changed:
+- `src/gpt_repro/gp/exact_gp.py` *(Phase-1 module modification)* —
+  added `predict_derivative(X_star) -> (dmu, dsigma)` implementing
+  Eq. (16) analytically (mean via `V α`, variance via
+  `K11 - V^T M V` on the diagonal). The pre-existing
+  `predict_with_derivative` (returns 4-tuple) is unchanged. Also
+  added a thin `predict_derivative_autograd(X_star) -> dmu` for the
+  Phase-5 cross-check test.
+- `src/gpt_repro/transport/nonlinear_gp.py` — added
+  `GPNonlinearResidual.predict_derivative(X_star)` returning
+  `(dmu (M, d, d), dsigma (M, d, d))` by stacking the per-output-dim
+  Eq. (16) std vectors.
+- `src/gpt_repro/transport/uncertainty.py` *(new)* —
+  `transportation_velocity_variance(transport, X, Xdot)` for Eq. (17)
+  and `total_velocity_variance(f_hat_policy, transport, X, Xdot)` for
+  Eq. (18). Both are pure functions and clip floating-point negative
+  variances at zero (warning if magnitude > 1e-12).
+- `src/gpt_repro/transport/__init__.py` — re-exports the two new
+  helpers alongside the Phase-3/4 symbols.
+- `src/gpt_repro/policies/ds_policy.py` *(Phase-2 module modification)* —
+  added the trivial alias `predict_with_std(X) -> (mean, std)` so
+  Phase-5 callers don't have to fiddle with the `return_std` flag.
+- `src/gpt_repro/viz/vector_field.py` — extended `plot_vector_field`
+  with `std_fn=None` (optional callable overriding the arrow-color
+  std source) and `cbar_label=None`. Backwards compatible.
+- `src/gpt_repro/viz/transport_2d.py` —
+    * added `plot_uncertainty_field` (single 3-D surface plot of a
+      scalar std field) and `plot_uncertainty_triptych` (Fig. 6 layout
+      with shared color scale + colorbar).
+    * wired the Phase-4 `uncertainty_overlay` parameter of
+      `plot_phi_scheme` to actually do something: it accepts
+      `demo_xhat_std_scalar` (band on panel c) and
+      `field_total_std_fn` (color override on the field in panel c).
+    * added a private `_draw_trajectory_uncertainty_band` helper
+      that shades a ±2σ band perpendicular to a 2-D polyline.
+- `src/gpt_repro/viz/__init__.py` — re-exports the two new viz
+  helpers.
+- `tests/test_uncertainty.py` *(new)* — 6 tests:
+  Eq. (16) variance vs MC of posterior samples; Eq. (16) mean vs
+  autograd; Σ_x̂ much smaller at S than at OOD; Σ_f̂ grows away from
+  the transported demo; Σ_total ≡ Σ_x̂ + Σ_f̂ (1e-10); shape
+  consistency and non-negativity.
+- `scripts/figure5_scheme.py` *(updated)* — now Phase 5:
+  computes the per-demo Σ_x̂ scalar band and a target-frame Σ_total
+  callable, passes them as `uncertainty_overlay` to
+  `plot_phi_scheme`, and writes to
+  `reports/figures/phase5_fig5_full.png`. Phase-4's
+  `phase4_fig5_scheme.png` is left untouched.
+- `scripts/figure6_uncertainty.py` *(new)* — Fig. 6 triptych. Builds
+  a `G × G` mesh in source frame, evaluates all three variance fields,
+  L2-norm-reduces each (M, d) variance to a scalar std, renders the
+  three 3-D surfaces with a shared color/z scale, and writes
+  `phase5_fig6_uncertainty.png` plus `reports/results/phase5_uncertainty.json`.
+- `scripts/smoke_phase5.py` *(new)* — tiny version of figure6 (G=8)
+  with explicit PASS/FAIL on figure existence, finiteness,
+  non-negativity, and Σ_total ≥ Σ_x̂ elementwise.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- Eq. (16) analytical implementation: gradient mean matches the
+  autograd path to ≈ 4e-5 max-norm on a sine fit; gradient std
+  matches a 600-sample posterior Monte-Carlo estimate within
+  1e-2 atol.
+- Σ_x̂ on the toy 2-D scenario: ~ 1e-3 at training source points
+  and ~ 1 at points 5 + units away — well over the ×10 contrast
+  the test demands.
+- Σ_f̂ grows from on-demo (~ 1e-3) to off-demo (~ 1) for the f̂
+  refit on transported letter-C.
+- Eq. (18) bookkeeping holds to 1e-10 (the difference
+  `Σ_total - Σ_x̂` reproduces the independently-computed Σ_f̂).
+- Phase 5 Fig. 5 panel (c) shows the ±2σ Σ_x̂ band perpendicular
+  to the transported demo and arrow color encoding Σ_total.
+- Fig. 6 triptych renders three comparable 3-D std surfaces.
+  Default-seed summary (n_grid=30, n_demos=60):
+      transport : mean 3.628, max 6.048
+      epistemic : mean 0.801, max 2.807
+      total     : mean 3.780, max 6.262
+      median(transport) = 3.610, OOD threshold = 7.221, fraction = 0.000
+  (Transport dominates total in this scenario because the demo
+  letter-C lives well above the surface S, where ψ's gradient
+  variance is large; the f̂ epistemic is comparatively small.)
+- `pytest -q` → 32 passed (5 Phase 1 + 6 Phase 2 + 7 Phase 3 +
+  8 Phase 4 + 6 Phase 5).
+
+What was tricky:
+- Eq. (16) variance derivation: at the same test point :math:`x_*`,
+  the RBF prior covariance of the gradient is *diagonal* with entries
+  :math:`\\sigma_f^2 / \\ell_d^2` (this falls out from
+  :math:`\\partial^2 k / \\partial x_d \\partial x'_{d'}|_{x=x'}`
+  with the cross-derivative vanishing). Only the per-axis variance
+  is needed by Sec. IV-E; computing the full cross-axis posterior
+  covariance would be a strict generalization but unnecessary here.
+- Sec. IV-B's residual GP uses `interp_mode` (tight noise constraint)
+  to interpolate the source ↔ target pairs noiselessly. With that on,
+  the gradient variance at training points can occasionally produce
+  a slightly-negative `K11 − V^T M V` from floating-point cancellation;
+  `predict_derivative` clamps at zero and the Phase-5 uncertainty
+  helpers also clamp at zero before warning if the magnitude is
+  larger than 1e-12.
+- The "norm reduction" for the Fig. 6 panels is the L2 norm of the
+  per-axis std vector, equivalent to :math:`\\sqrt{\\mathrm{trace}(\\Sigma)}`.
+  Documented this clearly in `figure6_uncertainty.py`'s docstring and
+  in the band-width comment in `figure5_scheme.py`.
+- For the Phase-5 Fig.5 field-color override, I extended
+  `plot_vector_field` with an optional `std_fn` rather than coupling
+  `plot_phi_scheme` to the uncertainty helpers directly — keeps the
+  vector-field plot generic for future phases.
+
+Math / equation references implemented:
+- Eq. (16) mean of GP gradient → `ExactGPRegressor.predict_derivative`
+  (`dmu = V^T α`, where `V_{nd} = ∂k(x*, X_n)/∂x*_d`).
+- Eq. (16) variance of GP gradient → same method, per-axis diagonal
+  (`σ_f²/ℓ_d² - V_{:,d}^T (K+σ²I)^{-1} V_{:,d}`).
+- Eq. (17) Σ_x̂ = (J)² Σ_ẋ      → `transportation_velocity_variance`.
+- Eq. (18) Σ_total = Σ_f̂ + Σ_x̂ → `total_velocity_variance`.
+
+Numerical sanity checks passed:
+- Eq. (16) mean: analytical vs autograd to ≈ 4e-5.
+- Eq. (16) variance: analytical vs Monte-Carlo posterior samples
+  to 1e-2 atol with 600 samples.
+- Σ_x̂ at source points ≪ Σ_x̂ at OOD points (× ratio ≫ 10).
+- Σ_f̂ at OOD > Σ_f̂ at demo points.
+- Σ_total - Σ_x̂ ≡ Σ_f̂ to 1e-10.
+- All scalar / per-dim variance fields are finite and non-negative.
+
+Open questions / deferred work:
+- Eq. (16) cross-axis covariance of the gradient is not implemented;
+  only the per-axis diagonal. Sufficient for Eqs. (17)/(18) because
+  the "weighted-sum-of-Gaussians" propagation only consumes per-axis
+  variances. If a later phase needs the full posterior covariance of
+  the Jacobian (e.g. for Σ_x̂ on coupled velocities), the same
+  K10 / K11 machinery extends one matrix multiply further.
+- Σ_x̂ in the toy scenario is dominated by the GP prior variance
+  (≈ σ_f² / ℓ²) because the demo letter-C is far from the source
+  surface S; this is faithful to the paper but means the "OOD
+  fraction" smoke metric is 0 on the default seed (everything
+  is OOD by the crude 2×-median rule). It still rises sharply at
+  points far outside the bounding box of the demo+S — verified in
+  `test_transport_variance_zero_at_source_points`.
+- No SVGP-based uncertainty path yet; would only matter if a later
+  phase scales the residual GP beyond a few hundred points.

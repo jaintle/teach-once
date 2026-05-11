@@ -339,3 +339,104 @@ class ExactGPRegressor:
             dmean_dx_t.cpu().numpy(),
             dstd_dx.detach().cpu().numpy(),
         )
+
+    # ------------------------------------------------------------------
+    # Eq. (16) — proper "mean / std of the GP gradient" (the random
+    # variable ∂f/∂x, not the gradient of the predictive scalars).
+    # Used by Phase 5 for transportation uncertainty (Sec. IV-E).
+    # ------------------------------------------------------------------
+    def predict_derivative(
+        self, X_star: ArrayLike
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        r"""Mean and per-axis std of the GP gradient :math:`\partial f / \partial x`.
+
+        Implements **Eq. (16)** of Franzese et al. (2024) analytically.
+        Given a GP fit with the squared-exponential (ARD-RBF) kernel,
+        the gradient ``∂f/∂x_*`` is also Gaussian distributed; using
+        the standard derivation (see e.g. Rasmussen & Williams 2006 §9.4
+        and paper ref. [26]):
+
+        * mean :math:`\mu'(x_*)_d = \sum_n V_{n,d}\,\alpha_n`,
+          where :math:`V_{n,d} = \partial k(x_*, X_n)/\partial x_{*,d}`
+          and :math:`\alpha = (K + \sigma_n^2 I)^{-1} y`.
+        * variance :math:`\Sigma'(x_*)_{d,d} = K_{11}(x_*, x_*)_{d,d}
+          - V_{:,d}^\top (K + \sigma_n^2 I)^{-1} V_{:,d}` where
+          :math:`K_{11}(x_*, x_*)_{d,d'} = \sigma_f^2\,\delta_{d,d'}/\ell_d^2`
+          is the RBF prior covariance of the gradient at a single point.
+
+        Only the per-axis diagonal of the gradient covariance is returned;
+        the cross-axis covariances are not needed by Sec. IV-E.
+
+        Parameters
+        ----------
+        X_star : array-like of shape (M, D) or (D,) — query points.
+
+        Returns
+        -------
+        dmu    : numpy.ndarray (M, D) — mean of the GP gradient at each query.
+        dsigma : numpy.ndarray (M, D) — per-axis std of the GP gradient.
+        """
+        self._ensure_fit()
+        X_t = _to_2d_tensor(X_star, self._dtype, self._device)
+        N_star, D = X_t.shape
+
+        with torch.no_grad():
+            X_tr = self._X_train  # (N, D)
+            y_tr = self._y_train  # (N,)
+
+            base_kernel = self.model.covar_module.base_kernel
+            outputscale = self.model.covar_module.outputscale  # σ_f²
+            lengthscale = base_kernel.lengthscale  # (1, D)
+            noise = self.likelihood.noise  # σ_n²
+
+            # K + σ_n² I and its Cholesky factor.
+            K_xx = self.model.covar_module(X_tr).to_dense()
+            A = K_xx + torch.eye(
+                K_xx.shape[0], dtype=K_xx.dtype, device=K_xx.device
+            ) * noise
+            jitter = 1e-8 * torch.eye(A.shape[0], dtype=A.dtype, device=A.device)
+            L = torch.linalg.cholesky(A + jitter)
+
+            # k_* and ∂k_*/∂x_*  (V tensor)
+            diff = X_t.unsqueeze(1) - X_tr.unsqueeze(0)  # (M, N, D)
+            sqdist = ((diff / lengthscale) ** 2).sum(-1)  # (M, N)
+            k_star = outputscale * torch.exp(-0.5 * sqdist)  # (M, N)
+            inv_ls_sq = 1.0 / (lengthscale ** 2)  # (1, D)
+            # V[m, n, d] = ∂k(x*_m, X_n)/∂x*_m_d = -k(...) * (x*_m_d - X_n_d)/ℓ_d²
+            V = -k_star.unsqueeze(-1) * diff * inv_ls_sq  # (M, N, D)
+
+            # Gradient mean: dmu[m, d] = V[m, :, d] · α  with α = M y.
+            alpha = torch.cholesky_solve(y_tr.unsqueeze(-1), L).squeeze(-1)  # (N,)
+            dmu = torch.einsum("mnd,n->md", V, alpha)
+
+            # Gradient variance, per axis (diagonal of Σ').
+            # K11_dd = σ_f² / ℓ_d²  (off-diagonal not needed).
+            prior_var = outputscale * inv_ls_sq.squeeze(0)  # (D,)
+            dvar = torch.empty((N_star, D), dtype=X_t.dtype, device=X_t.device)
+            for d in range(D):
+                Vd = V[:, :, d]  # (M, N)
+                MVd = torch.cholesky_solve(Vd.transpose(0, 1), L)  # (N, M)
+                quad = (Vd * MVd.transpose(0, 1)).sum(-1)  # (M,)
+                dvar[:, d] = (prior_var[d] - quad).clamp_min(0.0)
+            dsigma = dvar.sqrt()
+
+        return dmu.detach().cpu().numpy(), dsigma.detach().cpu().numpy()
+
+    def predict_derivative_autograd(self, X_star: ArrayLike) -> np.ndarray:
+        """Autograd-based mean of the GP gradient at ``X_star``.
+
+        Equivalent to the ``dmu`` returned by :meth:`predict_derivative`,
+        but computed by differentiating the gpytorch predictive mean with
+        :mod:`torch.autograd`. Kept for cross-validation in tests — the
+        two paths must agree to ~1e-4 on smooth problems.
+        """
+        self._ensure_fit()
+        X_t = _to_2d_tensor(X_star, self._dtype, self._device)
+        self.model.eval()
+        self.likelihood.eval()
+        x_star = X_t.clone().detach().requires_grad_(True)
+        with gpytorch.settings.fast_pred_var():
+            f_pred = self.model(x_star)
+            mean_t = f_pred.mean
+        dmu = torch.autograd.grad(mean_t.sum(), x_star)[0]
+        return dmu.detach().cpu().numpy()
