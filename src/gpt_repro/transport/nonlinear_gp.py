@@ -122,6 +122,13 @@ class GPNonlinearResidual:
         if not self.is_fit:
             raise RuntimeError("GPNonlinearResidual.fit must be called before predict.")
 
+    def transform(self, X_star: ArrayLike) -> np.ndarray:
+        """Alias for ``predict(X, return_std=False)`` — returns just the
+        posterior-mean residual ψ(X) at the query points. Added so the
+        Phase-6 baselines (which share a common ``transform`` interface)
+        can compare directly against the GP residual model."""
+        return self.predict(X_star, return_std=False)
+
     def predict(
         self, X_star: ArrayLike, return_std: bool = True
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:

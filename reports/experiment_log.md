@@ -537,3 +537,134 @@ Open questions / deferred work:
   `test_transport_variance_zero_at_source_points`.
 - No SVGP-based uncertainty path yet; would only matter if a later
   phase scales the residual GP beyond a few hundred points.
+
+---
+
+## Phase 6 — 2D surface cleaning comparison (Sec. V-A, Fig. 7, Table I)
+
+Date: 2026-05-11
+Paper section(s) implemented: Sec. V-A — six transportation baselines,
+Fig. 7 (qualitative panel grid), Table I (modality / vel-gen / uncertainty).
+
+Files added/changed:
+- `src/gpt_repro/baselines/base.py` (new) — `BaseTransportBaseline` ABC
+  + class-attribute schema for Table I.
+- `src/gpt_repro/baselines/kmp.py` (new) — KMP as RBF Nadaraya-Watson
+  on the residual (paper ref. [6]).
+- `src/gpt_repro/baselines/laplacian_editing.py` (new) — chain-Laplacian
+  trajectory deformation with soft anchor constraints (paper ref. [13]).
+- `src/gpt_repro/baselines/ensemble_rf.py` (new) — bootstrap ensemble
+  of `RandomForestRegressor`s per output dim; mean/std over members.
+- `src/gpt_repro/baselines/ensemble_nn.py` (new) — five 2-layer × 64-unit
+  MLPs trained from independent random inits; mean/std over members.
+- `src/gpt_repro/baselines/ensemble_nf.py` (new) — minimal Real-NVP
+  from scratch (~110 lines): two affine coupling layers with
+  tanh-bounded log-scale, MSE-trained as a paired regressor; ensemble
+  of five members.
+- `src/gpt_repro/baselines/gp_baseline.py` (new) — thin wrapper around
+  Phase-4 `GPNonlinearResidual` (the paper's proposed method).
+- `src/gpt_repro/baselines/__init__.py` — `BASELINES` registry +
+  `BASELINE_NAMES` display labels.
+- `src/gpt_repro/transport/nonlinear_gp.py` (Phase-4 module modification)
+  — added `transform(X)` alias returning the residual posterior mean,
+  so all baselines share the same callable name.
+- `src/gpt_repro/metrics/__init__.py` + `metrics/table1.py` (new) —
+  `build_table1`, `format_ascii`, `save_csv`, and
+  `print_and_save` that reads class attrs and emits Table I.
+- `tests/test_baselines.py` (new) — 6 tests:
+  fit/predict shape per baseline; KMP/LE have no uncertainty;
+  ensemble std > 0; GP baseline matches GPNonlinearResidual;
+  RF stays overconfident OOD while GP grows; Real-NVP bijection.
+- `scripts/figure7_cleaning_comparison.py` (new) — full Fig. 7 with
+  γ applied externally to all trajectories, 2×3 panel grid in paper
+  order (KMP, E-RF, E-NN / LE, E-NF, GP).
+- `scripts/smoke_phase6.py` (new) — tiny smoke runner with PASS/FAIL.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- All 6 baselines fit on the (S_lin, T) anchor set, transport the
+  cleaning demo, and return finite outputs.
+- Table I matches the paper's columns exactly (Velocity Gen.,
+  Uncertainty type) — generated from class attributes so the table
+  stays in sync with the implementation:
+      KMP    No   None
+      LE     No   None
+      E-RF   Yes  Estimated
+      E-NN   Yes  Estimated
+      E-NF   Yes  Estimated
+      GP     Yes  Analytical
+- Fig. 7 renders 6 panels with the target surface in black, the
+  transported cleaning demo in red, per-member spread for ensembles,
+  and a ±2 σ band perpendicular to the trajectory for the four
+  methods with uncertainty.
+- Quantitative output at the default seed (n_demos = 120,
+  n_source_points = 24):
+      KMP : mean dist to surface = 0.184
+      E-RF: 0.164 (std mean 0.046)
+      E-NN: 0.165 (std mean 0.036)
+      LE  : 0.199
+      E-NF: 0.209 (std mean 0.070)
+      GP  : 0.178 (std mean 0.205)
+  The GP std band is visibly wider than the ensemble bands — the
+  Table I "Analytical" entry captures the OOD growth that the
+  ensembles miss (matches the paper's qualitative claim).
+- `pytest -q` → 38 passed (5 + 6 + 7 + 8 + 6 + 6).
+
+What was tricky:
+- LE for arbitrary X (rather than the original demo) needed a
+  reinterpretation: at `.transform(X)` time we build a chain Laplacian
+  over the rows of X, snap each (S, T) anchor to its nearest X-node,
+  and solve a per-output-dim least-squares with soft constraints
+  (large penalty weight). Hard-constraint partitioning would be
+  equivalent but more code.
+- E-NF / Real-NVP: training as a *paired regressor* with MSE loss
+  (not as a density estimator) converged reliably on the 2-D
+  cleaning residual, but only after bounding the affine log-scale
+  with `tanh` — unbounded log_s blows up on tiny data sets. The
+  test asserts that the resulting member is still bijective:
+  `inverse(forward(x)) − x` is below 1e-3 on random inputs.
+- The paper applies γ to all trajectories before any baseline runs.
+  Honoring that strictly required computing the residual outside
+  the baselines and adding the residual back in the plotting code:
+  `transported_demo = γ(demo) + baseline.transform(γ(demo))`. The
+  baseline's `transform` returns the residual map δ, not the full ϕ.
+
+Qualitative match with the paper's Fig. 7:
+- KMP / LE produce smooth deformed trajectories with no uncertainty
+  display — qualitatively matches the paper's depiction.
+- E-RF / E-NN / E-NF show tighter ±2σ bands than GP, even far above
+  the surface — matches the paper's "overconfident ensembles"
+  commentary.
+- GP shows a much wider band that grows where the demo is far from
+  the (S, T) anchors — matches the Sec. IV-E zero-mean fall-back
+  behavior validated in Phase 5.
+
+Math / equation references implemented: no new equations from the
+paper itself — the baselines are implementations of references
+[6] (KMP), [13] (LE), and [32] (Real NVP). Table I reproduces the
+modality / generalization / uncertainty columns of the paper.
+
+Numerical sanity checks passed:
+- All baselines produce (M, d)-shaped outputs.
+- KMP / LE: `predict_with_std` returns `(mean, None)`.
+- E-RF, E-NN, E-NF: per-prediction std is non-negative and non-zero
+  on average.
+- `GPTransportBaseline.transform == GPNonlinearResidual.transform`
+  to 1e-6.
+- E-RF std at points 10+ units from data ≤ 2× std at training points
+  (overconfident OOD); GP std at the same far points > 10× std near
+  data (Sec. IV-E fall-back).
+- Real-NVP `inverse(forward(x))` matches input to 1e-3.
+
+Open questions / deferred work:
+- KMP "arc-length" interpretation was simplified to RBF
+  Nadaraya-Watson in input space. A trajectory-arc-length variant
+  would require passing the demo through `fit`, breaking the
+  unified `(S_linear, T)` interface — out of scope here.
+- The Real-NVP regression objective is not the standard NF
+  log-likelihood; it works for the 2-D paired transport but
+  doesn't give a proper density estimate. The ensemble std remains
+  a sensible OOD signal nonetheless.
+- Quantitative table of trajectory metrics (Frechet, DTW, area)
+  is intentionally deferred to Phase 7 / Sec. V-B per the
+  CLAUDE.md non-goals list for this phase.
