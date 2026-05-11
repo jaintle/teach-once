@@ -114,6 +114,12 @@ class ExactGPRegressor:
         for generic regression (Sec. III-B). ``"zero"`` uses
         :class:`gpytorch.means.ZeroMean` and is required by the dynamical
         system policy in Sec. III-A.
+    interp_mode : bool, optional
+        If True, clamp the Gaussian observation noise to a near-zero
+        interval so the GP effectively interpolates the training data.
+        Used by the policy-transportation residual model in Phase 4,
+        where the training residuals are essentially noiseless because
+        they come from a deterministic alignment step. Default False.
     """
 
     def __init__(
@@ -123,6 +129,7 @@ class ExactGPRegressor:
         dtype: torch.dtype = torch.float64,
         device: Optional[Union[str, torch.device]] = None,
         mean: str = "constant",
+        interp_mode: bool = False,
     ) -> None:
         self.n_iter_default = int(n_iter_default)
         self.lr = float(lr)
@@ -131,6 +138,7 @@ class ExactGPRegressor:
         if mean not in {"constant", "zero"}:
             raise ValueError(f"mean must be 'constant' or 'zero', got {mean!r}")
         self._mean_type = mean
+        self._interp_mode = bool(interp_mode)
         self.model: Optional[_ExactGPModel] = None
         self.likelihood: Optional[gpytorch.likelihoods.GaussianLikelihood] = None
         self._X_train: Optional[torch.Tensor] = None
@@ -159,9 +167,17 @@ class ExactGPRegressor:
                 f"X has {X_t.shape[0]} samples but y has {y_t.shape[0]}"
             )
 
-        likelihood = gpytorch.likelihoods.GaussianLikelihood().to(
-            device=self._device, dtype=self._dtype
-        )
+        if self._interp_mode:
+            # Constrain the observation noise to a tiny interval so the
+            # posterior mean essentially interpolates the training data.
+            noise_constraint = gpytorch.constraints.Interval(1e-10, 1e-6)
+            likelihood = gpytorch.likelihoods.GaussianLikelihood(
+                noise_constraint=noise_constraint
+            ).to(device=self._device, dtype=self._dtype)
+        else:
+            likelihood = gpytorch.likelihoods.GaussianLikelihood().to(
+                device=self._device, dtype=self._dtype
+            )
         model = _ExactGPModel(X_t, y_t, likelihood, mean_type=self._mean_type).to(
             device=self._device, dtype=self._dtype
         )

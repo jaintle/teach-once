@@ -249,3 +249,138 @@ Open questions / deferred work:
   will reuse `LinearTransport.jacobian` as the linear part.
 - No epistemic-uncertainty propagation yet (Eqs. 17-18) — that
   follows the GP-residual machinery, so also Phase 4.
+
+---
+
+## Phase 4 — Non-linear ψ + full ϕ + velocity / orientation / stiffness transport (Sec. IV-B, IV-C, IV-D)
+
+Date: 2026-05-11
+Paper section(s) implemented:
+- Sec. IV  Eq. (7)  ϕ = γ + ψ ∘ γ.
+- Sec. IV-B Eq. (12)  ψ residual GP.
+- Sec. IV-C Eqs. (13)–(14)  velocity transport via J(x) and Taylor expansion.
+- Sec. IV-D Eq. (15) + prose  orientation transport with det normalization + QR.
+- Sec. IV-D            K̂ = J K J^T, D̂ = J D J^T.
+
+Files added/changed:
+- `src/gpt_repro/gp/exact_gp.py` — added `interp_mode` kwarg (default
+  False). When True, constrains the GaussianLikelihood noise to
+  `(1e-10, 1e-6)` so the posterior mean interpolates the training
+  data. Used by `GPNonlinearResidual` because the residual labels
+  come from a deterministic alignment step and carry no noise.
+  Phase 1 / Phase 2 callers are unaffected (default off).
+- `src/gpt_repro/transport/nonlinear_gp.py` — new
+  `GPNonlinearResidual` class implementing Eq. (12) (one zero-mean
+  GP per output dimension, with `interp_mode=True` defaulted on so
+  ψ exactly absorbs γ's residual). `jacobian()` assembles the
+  output-dim × input-dim Jacobian row-by-row by reusing
+  `ExactGPRegressor.predict_with_derivative` (Phase 1, Eq. 16).
+- `src/gpt_repro/transport/policy_transport.py` — new
+  `PolicyTransport` class for ϕ = γ + ψ ∘ γ with:
+    * `transform`              — Eq. (7).
+    * `jacobian`               — analytical chain rule
+      J = (I + ∂ψ/∂γ) A (autograd through ψ, no finite differences).
+    * `transform_velocity`     — Eq. (13).
+    * `transform_orientation`  — Eq. (15) with the prose corrections:
+      normalize J by det(J)^(1/d) and project J R to the nearest
+      proper rotation via QR + sign correction. This deviates from
+      a literal reading of Eq. (15) but matches the paper's prose
+      ("J is in general not orthogonal, so we [project] ...").
+    * `transform_stiffness` / `transform_damping` — Sec. IV-D.
+    * `_nearest_proper_rotation` helper at module level.
+- `src/gpt_repro/transport/__init__.py` — re-exports
+  `GPNonlinearResidual`, `PolicyTransport`, `_nearest_proper_rotation`.
+- `src/gpt_repro/viz/transport_2d.py` — added `plot_phi_scheme`
+  for the Fig. 5 2×2 scheme with optional source / target DS fields
+  and a Phase-5 uncertainty-overlay hook.
+- `src/gpt_repro/viz/__init__.py` — re-exports `plot_phi_scheme`.
+- `tests/test_policy_transport.py` — 8 tests (identity recovery,
+  match-at-source-points, Jacobian-vs-FD, velocity chain rule,
+  orientation proper-rotation, stiffness symmetry+PSD,
+  OOD-falls-back-to-γ, zero-mean guard).
+- `scripts/figure3_full.py` — Fig. 3 with all four panels including
+  GP Transportation. Phase 3's `phase3_fig3_partial.png` left in
+  place; this one is `phase4_fig3_full.png`.
+- `scripts/figure5_scheme.py` — full 4-panel Fig. 5 scheme (demo
+  + DS in source frame, transported demo + refit DS in target frame).
+- `scripts/smoke_phase4.py` — tiny versions of both figures with
+  explicit PASS/FAIL on figure existence and `max ‖ϕ(S) - T‖ < 1e-2`.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- Full `PolicyTransport` pipeline trains in ~3 s for `n_source ≈ 20`
+  and fits the training pairs to ≈ 3e-6 max-norm residual under
+  `interp_mode`.
+- Analytical Jacobian matches the central finite-difference Jacobian
+  of `transform` to ~1e-9 in practice (test tolerance 1e-3).
+- Pure-rotation chain-rule test: with `T = R·S`, the transported
+  velocities match `R ẋ` to better than 5e-3 (test tolerance).
+- Out-of-distribution test points at `±[15, 20]` get ϕ that equals
+  γ to numerical zero (atol=1e-6), confirming the fall-back-to-linear
+  property the paper claims after Eq. (12).
+- Orientation transport always returns matrices with det = +1 and
+  R̂ R̂^T = I to machine precision.
+- Stiffness / damping transport preserves symmetry to ~1e-15 and
+  positive-definiteness in every tested case.
+- Fig. 3 panel 4 visibly shows the GP residual deforming the grid
+  away from the strict linear γ of panel 3.
+- Fig. 5 scheme cleanly visualizes: source demo (letter C above a
+  flat line) and source DS; flat surface S; transported demo
+  (curved C following the sinusoidal target surface) and refit DS
+  in the target frame; target curve T.
+- `pytest -q` → 26 passed (5 Phase 1 + 6 Phase 2 + 7 Phase 3 + 8 Phase 4).
+
+What was tricky:
+- gpytorch's default GaussianLikelihood imposes a noise floor of
+  ≈ 1e-4. With the noise stuck at that level the ψ-fit residual
+  on (S, T) plateaued around 0.009 max-norm — too loose to pass the
+  Eq. (12) "ψ absorbs the residual" property the paper invokes.
+  Resolution: added a small `interp_mode` switch to
+  `ExactGPRegressor` that uses
+  `noise_constraint=Interval(1e-10, 1e-6)`. With this on (default
+  for the residual GPs), ϕ(S) reproduces T to ~3e-6 max-norm.
+- The Phase-1 GP variance derivative formula assumes a finite
+  observation noise; with `interp_mode` on, the posterior variance
+  at training points dips slightly below zero from floating-point
+  rounding, and gpytorch emits a `NumericalWarning`. We rely on the
+  existing `clamp_min(0.0)` in `predict` to handle this; the warning
+  is harmless and is silenced in tests.
+- Orientation transport: a literal `R̂ = J R` is not orthogonal in
+  general because J carries non-uniform scaling. We follow the
+  paper's prose: normalize J by `det(J)^(1/d)` to strip the scale,
+  then project the product `J R` to the nearest proper rotation via
+  QR + sign correction. Compared to a polar-decomposition projection,
+  QR is cheaper and adequate because J is close to a rotation when ϕ
+  is well-fit.
+
+Math / equation references implemented:
+- Eq. (7)  ϕ(x) = γ(x) + ψ(γ(x))             → `PolicyTransport.transform`.
+- Eq. (12) ψ residual GP                     → `GPNonlinearResidual.fit/predict`.
+- Eq. (13) ẋ̂ = J(x) ẋ                       → `PolicyTransport.transform_velocity`.
+- Eq. (14) Taylor expansion of ϕ             → implicit in `.jacobian`.
+- Eq. (15) R̂_ee = J R_ee (+ paper's prose)  → `PolicyTransport.transform_orientation`.
+- K̂ = J K J^T                               → `PolicyTransport.transform_stiffness`.
+- D̂ = J D J^T                               → `PolicyTransport.transform_damping`.
+
+Numerical sanity checks passed:
+- ϕ(S) − T max-norm ≈ 3e-6 at default seed.
+- Jacobian-vs-FD max-norm error ≈ 1e-9 (tolerance 1e-3).
+- Velocity transport equals `J @ ẋ` exactly; equals analytic `R ẋ` to 5e-3
+  in the pure-rotation case.
+- Orientation output orthogonal and det = +1 to 1e-6.
+- Stiffness / damping output symmetric to 1e-10 and PSD when input PSD.
+- OOD: `max |ϕ(x_far) - γ(x_far)| < 1e-6` at points 20+ units from S.
+
+Open questions / deferred work:
+- Uncertainty propagation (Eqs. 17-18) is **intentionally deferred to
+  Phase 5**. The `uncertainty_overlay` parameter of
+  `plot_phi_scheme` is a no-op for now and is marked with a
+  TODO(phase5) comment so Phase 5 can wire it in.
+- The orientation projection uses QR; a polar-decomposition (SVD)
+  variant would be more accurate when J is far from a rotation.
+  Not needed for the 2D experiments of Sec. V.
+- The brief suggested an internal `predict_mean_tensor` on
+  `ExactGPRegressor`. Phase 4 ended up not needing it: the existing
+  `predict_with_derivative` (Phase 1) already returns the mean
+  gradient via autograd, so the residual Jacobian is built directly
+  on top of it without any new tensor-returning API.
