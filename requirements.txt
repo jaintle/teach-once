@@ -7,4 +7,5 @@ matplotlib==3.8.2
 tqdm==4.66.1
 pyyaml==6.0.1
 similaritymeasures==1.1.0
+hmmlearn>=0.3
 pytest==7.4.4

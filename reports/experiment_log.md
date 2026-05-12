@@ -668,3 +668,147 @@ Open questions / deferred work:
 - Quantitative table of trajectory metrics (Frechet, DTW, area)
   is intentionally deferred to Phase 7 / Sec. V-B per the
   CLAUDE.md non-goals list for this phase.
+
+---
+
+## Phase 7 — Multi-reference-frame benchmark (Sec. V-B, Figs. 8/9/10, U-test)
+
+Date: 2026-05-12
+Paper section(s) implemented: Sec. V-B — TP-GMM (paper ref. [2]),
+HMM (ref. [36]), DMP (linear-only variant), GPT comparison on 9
+synthetic multi-frame demonstrations, with 5 trajectory metrics
+(Fréchet, Area, DTW, final position, final orientation) and a
+Mann-Whitney U-test ranking (Figs. 9 / 10).
+
+Files added/changed:
+- `src/gpt_repro/policies/multiframe_demos.py` (new) — `FrameConfig`
+  dataclass, `make_multiframe_demo` (cubic-Bezier with frame-tangent
+  control handles), `make_9_frame_configs`, `get_frame_points`
+  (5-pt cross per frame, capturing position + orientation),
+  `make_canonical_demo`.
+- `src/gpt_repro/policies/__init__.py` — re-exports new symbols.
+- `src/gpt_repro/baselines/dmp.py` (new) — `DMPBaseline`: linear
+  γ-only transport + Phase-2 GP DS on transported labels.
+- `src/gpt_repro/baselines/gpt_adapter.py` (new) — `GPTBaseline`:
+  Phase-4 `PolicyTransport` + Phase-2 GP DS.
+- `src/gpt_repro/baselines/tpgmm.py` (new) — `TPGMMBaseline`:
+  per-frame sklearn `GaussianMixture` fits, PoG fusion of component
+  means + covariances at rollout time, temporal-ordering of
+  components by demo-time responsibility, piecewise-linear rollout
+  through ordered fused means.
+- `src/gpt_repro/baselines/hmm.py` (new) — `HMMBaseline`:
+  per-frame `hmmlearn.GaussianHMM`, same PoG fusion + temporal
+  ordering via Viterbi.
+- `src/gpt_repro/baselines/__init__.py` — re-exports the four new
+  baselines.
+- `src/gpt_repro/metrics/trajectory_metrics.py` (new) —
+  `frechet_distance`, `area_between_curves`, `dtw_distance`,
+  `final_position_error`, `final_orientation_error`. First three
+  delegate to ``similaritymeasures``.
+- `src/gpt_repro/metrics/utest.py` (new) — `mann_whitney_ranking`
+  (one-sided U-test wins per pair) and `build_ranking_table` /
+  `format_ranking_ascii`.
+- `src/gpt_repro/metrics/__init__.py` — re-exports new helpers.
+- `tests/test_multiframe.py` (new) — 8 tests:
+  frame-points shape, demo arc length > straight-line, 5-metric
+  zero on identical, 90° orientation, deterministic ranking, clear
+  U-test winner, TPGMM rollout reaches near goal, GPT adapter shape.
+- `scripts/run_multiframe_benchmark.py` (new) — 20-rep benchmark
+  with per-rep seed, all 5 metrics, U-test ranking + CSV exports.
+  Parameterized iteration counts so smoke tests can use a smaller
+  budget while the user can run full settings on a fast machine.
+- `scripts/figure8_qualitative.py` (new) — 2×4 panel grid
+  (HMM / TP-GMM / DMP / GPT × training / test); GPT panel overlays
+  ±2σ transportation uncertainty band from Phase 5.
+- `scripts/figure9_boxplots.py` (new) — 5-metric boxplots with
+  per-metric U-test ranks annotated on each box.
+- `scripts/figure10_test_boxplots.py` (new) — test-set
+  position / orientation boxplots for GPT, DMP, HMM_9, TPGMM_9.
+- `scripts/smoke_phase7.py` (new) — small-config end-to-end runner
+  with PASS / FAIL.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- All four multi-frame baselines fit and roll out without errors.
+- 46 / 46 tests pass (5 + 6 + 7 + 8 + 6 + 6 + 8).
+- Smoke run completes in ~20 s with all 3 figure files and both
+  results CSVs present.
+- Ranking table is generated end-to-end from the CSV output of the
+  benchmark runner.
+
+Sandbox benchmark output (seed = 0, **n_reps = 2** because the
+sandbox can't fit the full 20-rep run in a single 45 s window —
+the user should re-run the same command on their Mac for the
+paper's 20-rep result):
+
+    Method   Fréchet  Area  DTW  Final pos. err  Final orient. err
+    GPT      1        2     2    2               4
+    DMP      1        1     1    1               4
+    TPGMM_5  5        5     5    3               4
+    TPGMM_6  5        5     5    3               4
+    TPGMM_7  5        5     5    6               4
+    HMM_5    5        5     5    6               1
+    HMM_6    3        3     3    3               1
+    HMM_7    3        3     4    6               3
+
+Did GPT achieve rank 1 on final pos + orient?
+   • final position : rank 2 (DMP rank 1; GPT and DMP tied / close).
+   • final orient.  : rank 4 (HMM_6/HMM_5 rank 1 on this 2-rep run).
+With only 2 reps the U-test is statistically underpowered and the
+order between GPT and DMP can flip easily — they have the same
+underlying GP rollout structure and differ only in γ vs ϕ. The
+expected paper result (GPT rank 1 on both) should re-emerge at
+n_reps = 20; documenting the sandbox limit honestly.
+
+Training-set vs test-set: in the sandbox run, TP-GMM/HMM rank 5 on
+the trajectory-shape metrics (Fréchet / Area / DTW) while GPT and
+DMP rank 1-2 even on the training-set evaluation. This is broadly
+consistent with the paper's qualitative finding that
+trajectory-distribution methods need many demos and only generalize
+well on configurations close to those seen at training time.
+
+What was tricky:
+- Both TPGMM and HMM rollouts initially appended ``goal_pos`` to the
+  piecewise-linear path; this gave them a trivial rank-1 win on
+  final-position error regardless of model quality. Removed that
+  cheat so the rollout endpoint is the last fused component mean.
+- ``final_orientation_error`` returned ~1.5e-8 on identical
+  trajectories due to float32 ``arccos(1.0)`` round-off in
+  ``similaritymeasures``-adjacent paths; relaxed the test tolerance
+  to 1e-6 (still well below any meaningful angular error).
+- PoG fusion ridge protection: when the per-frame covariances are
+  near-singular (very tight HMM emissions with few demos), the
+  fused precision matrix can be ill-conditioned. Both TPGMM and HMM
+  detect ``cond > 1e8`` and add a 1e-6 ridge with a warning. No
+  NaNs observed in any test or benchmark run.
+
+Math / equation references implemented: this phase mostly composes
+existing pieces — Eq. (7) / (13) machinery from Phases 3-4, the
+Sec. III-A DS from Phase 2, plus textbook PoG fusion and standard
+trajectory similarity metrics from ``similaritymeasures``. No new
+paper equations are implemented here.
+
+Numerical sanity checks passed:
+- `frame_points` returns (10, 2) for both source and target.
+- Demo arc length > straight-line distance.
+- All 5 metrics return 0 on identical trajectories.
+- ``final_orientation_error`` ≈ π/2 for orthogonal approach
+  directions.
+- Mann-Whitney ranking is deterministic and assigns rank 1 to the
+  clearly-lower distribution.
+- TPGMM rollout endpoint within 2× initial distance to goal.
+- GPT adapter rollout has shape ``(n_steps + 1, 2)``.
+
+Open questions / deferred work:
+- LQR-controlled rollout (the paper's nominal TP-GMM/HMM rollout
+  scheme) is explicitly out of scope. We use a piecewise-linear
+  path through temporally-ordered fused component means, which the
+  paper's text describes as "greedy rollout". This is the main
+  modelling simplification of Phase 7; quantitatively it tends to
+  hurt TPGMM/HMM more than GPT/DMP.
+- Sandbox couldn't run the full 20-rep benchmark in one shot. The
+  per-rep cost is ~12 s with the iteration counts I chose; a Mac
+  with native MPS/AVX should finish 20 reps in ~3 minutes.
+- Velocity transport for TPGMM/HMM is not implemented — the
+  benchmark's two final-state metrics suffice for the Sec. V-B
+  comparison without velocity output.
