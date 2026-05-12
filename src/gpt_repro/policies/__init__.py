@@ -17,6 +17,10 @@ from gpt_repro.policies.multiframe_demos import (
     make_canonical_demo,
     make_multiframe_demo,
 )
+from gpt_repro.policies.multisource_demos import (
+    SourceConfig,
+    make_multisource_scenario,
+)
 
 __all__ = [
     "GPDynamicalSystem",
@@ -28,4 +32,6 @@ __all__ = [
     "make_9_frame_configs",
     "get_frame_points",
     "make_canonical_demo",
+    "SourceConfig",
+    "make_multisource_scenario",
 ]

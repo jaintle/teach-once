@@ -7,6 +7,8 @@ Sec. V-A residual-transport ``BASELINES`` dict.
 
 from gpt_repro.baselines.base import BaseTransportBaseline
 from gpt_repro.baselines.dmp import DMPBaseline
+from gpt_repro.baselines.multisource_dmp import MultiSourceDMP
+from gpt_repro.baselines.multisource_gpt import MultiSourceGPT
 from gpt_repro.baselines.ensemble_nf import EnsembleNFBaseline
 from gpt_repro.baselines.ensemble_nn import EnsembleNNBaseline
 from gpt_repro.baselines.ensemble_rf import EnsembleRFBaseline
@@ -48,6 +50,9 @@ __all__ = [
     # Phase 7 multi-frame baselines.
     "DMPBaseline",
     "GPTBaseline",
+    # Phase 8 multi-source baselines.
+    "MultiSourceGPT",
+    "MultiSourceDMP",
     "TPGMMBaseline",
     "HMMBaseline",
 ]

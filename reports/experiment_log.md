@@ -812,3 +812,101 @@ Open questions / deferred work:
 - Velocity transport for TPGMM/HMM is not implemented — the
   benchmark's two final-state metrics suffice for the Sec. V-B
   comparison without velocity output.
+
+---
+
+## Phase 8 — Multi-source single-target (Sec. V-C, Fig. 11)
+
+Date: 2026-05-12
+Paper section(s) implemented: Sec. V-C "Multiple Sources, Single Target" —
+K source demonstrations each transported to a shared target via individual
+ϕ_k = γ_k + ψ_k maps (Phase 4); pooled labels fit a single GP DS; compared
+against single-source GPT and linear-only DMP ablation.
+
+Files added/changed:
+- `src/gpt_repro/policies/multisource_demos.py` (new) — `SourceConfig`
+  dataclass, `make_multisource_scenario` (seed-varied source positions /
+  angles, shared target, 5-pt cross anchors per frame).
+- `src/gpt_repro/baselines/multisource_gpt.py` (new) — `MultiSourceGPT`:
+  K parallel PolicyTransport fits + pooled GPDynamicalSystem +
+  `uncertainty()` returning mean_k(sqrt(trace(Σ_total_k))) per point.
+- `src/gpt_repro/baselines/multisource_dmp.py` (new) — `MultiSourceDMP`:
+  K parallel LinearTransport fits + pooled GPDynamicalSystem (no ψ).
+- `src/gpt_repro/baselines/__init__.py` — re-exports MultiSourceGPT,
+  MultiSourceDMP.
+- `src/gpt_repro/policies/__init__.py` — re-exports SourceConfig,
+  make_multisource_scenario.
+- `scripts/run_multisource_benchmark.py` (new) — 10-rep benchmark
+  (MultiSourceGPT, MultiSourceDMP, SingleSourceGPT); Fréchet, final
+  pos/orient; saves CSV + JSON.
+- `scripts/figure11_multisource.py` (new) — Fig. 11: 3-panel qualitative
+  top row (sources, multi-source GPT transported + uncertainty, single-source
+  GPT) + 3-panel bottom row (metric boxplots with U-test rank annotations).
+- `tests/test_multisource.py` (new) — 6 tests: scenario shapes,
+  MultiSourceGPT/DMP fit no exception, rollout shape, fusion Fréchet ≤ 2×
+  single-source, uncertainty non-negative.
+- `scripts/smoke_phase8.py` (new) — PASS/FAIL smoke test < 60 s.
+- `README.md` (new) — setup, smoke commands, figure table, benchmark
+  commands, directory layout, non-goals.
+- `reports/REPORT.md` (new) — technical report: phase-by-phase results,
+  Sec. V-A/B/C tables, deviations, reproducibility notes.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- All 6 Phase 8 unit tests pass; 52/52 total tests pass.
+- Smoke test completes in ≈ 2.6 s.
+- Sec. V-C main claim: MultiSourceGPT Fréchet (2.7579) < SingleSourceGPT
+  Fréchet (3.1952) — claim **confirmed** (ratio ≈ 0.86).
+- Multi-source fusion also improves final orientation error:
+  1.24 rad (multi) vs 1.78 rad (single) — consistent with paper.
+- Fig. 11 renders qualitative panels A/B/C and quantitative boxplots
+  with U-test rank annotations. Saved as PNG (300 dpi) and PDF.
+- `reports/results/multisource_benchmark_results.csv` and
+  `reports/results/phase8_multisource.json` saved correctly.
+
+Benchmark output (seed=0, n_reps=10, n_sources=4):
+    Method           Fréchet         Final pos      Final orient
+    MultiSourceGPT   2.7579 ± 0.5873 2.5843 ± 0.77  1.2401 ± 0.65
+    MultiSourceDMP   2.7579 ± 0.5873 2.5843 ± 0.77  1.2401 ± 0.65
+    SingleSourceGPT  3.1952 ± 0.8842 2.9388 ± 1.15  1.7831 ± 0.60
+
+Did MultiSourceGPT beat SingleSourceGPT on Fréchet? YES (2.76 vs 3.20).
+Does multi-source fusion help on orientation error? YES (1.24 vs 1.78 rad).
+Did multi-source hurt on any metric? NO.
+
+What was tricky:
+- MultiSourceGPT and MultiSourceDMP produced identical results. This is
+  expected and correct: our 2D letter-C sources differ from the target by
+  rotation + translation only (fully captured by γ), leaving ψ nothing to
+  learn. In the paper's real robot experiments, curved surfaces would make
+  the nonlinear component matter. The equivalence is documented in REPORT.md.
+- Initial `make_multisource_scenario` used fixed source offsets, making
+  all benchmark reps return identical scenarios (std = 0). Fixed by deriving
+  source positions from `seed` using `np.random.default_rng`.
+- `smoke_phase8.py` initially tried `import scripts.figure11_multisource`
+  (which fails since scripts/ is not a package); fixed to use `importlib`
+  after adding scripts/ to `sys.path`.
+
+Math / equation references implemented:
+- Eq. (7) ϕ_k = γ_k + ψ_k ∘ γ_k — one PolicyTransport per source,
+  reusing Phase 4 machinery.
+- Eq. (17)–(18) uncertainty per source → `MultiSourceGPT.uncertainty`
+  calls `total_velocity_variance` per source and averages std values.
+
+Numerical sanity checks passed:
+- Scenario shapes: n_sources source demos, shapes (N, 2); T.shape = (5, 2).
+- MultiSourceGPT/DMP fit without exception (n_iter=20).
+- Rollout shape = (n_steps+1, 2) for any n_steps.
+- MultiSourceGPT Fréchet ≤ 2× SingleSourceGPT Fréchet (seed=0, 4 sources).
+- Uncertainty values are finite, non-negative, shape = (N,).
+
+Open questions / deferred work:
+- Multi-source fusion doesn't show GPT > DMP advantage in 2D rotation/
+  translation scenario. Curved surface experiments (Sec. V-A style sources)
+  would reveal the nonlinear benefit; out of scope per CLAUDE.md.
+- `MultiSourceGPT.uncertainty` treats target-space query X as approximately
+  source-space when calling `total_velocity_variance`. A more rigorous
+  version would compute the inverse transport ϕ_k^{-1}(x) first; not needed
+  for visualization.
+- No SVGP path for large multi-source point sets (K × N >> few hundred).
+

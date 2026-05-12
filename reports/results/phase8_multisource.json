@@ -1,0 +1,53 @@
+{
+  "summary": {
+    "MultiSourceGPT": {
+      "frechet": {
+        "mean": 2.7579,
+        "std": 0.5873
+      },
+      "final_pos": {
+        "mean": 2.5843,
+        "std": 0.7713
+      },
+      "final_orient": {
+        "mean": 1.2401,
+        "std": 0.6539
+      }
+    },
+    "MultiSourceDMP": {
+      "frechet": {
+        "mean": 2.7579,
+        "std": 0.5873
+      },
+      "final_pos": {
+        "mean": 2.5843,
+        "std": 0.7713
+      },
+      "final_orient": {
+        "mean": 1.2401,
+        "std": 0.6539
+      }
+    },
+    "SingleSourceGPT": {
+      "frechet": {
+        "mean": 3.1952,
+        "std": 0.8842
+      },
+      "final_pos": {
+        "mean": 2.9388,
+        "std": 1.1494
+      },
+      "final_orient": {
+        "mean": 1.7831,
+        "std": 0.5965
+      }
+    }
+  },
+  "MultiSourceGPT_beats_SingleGPT_frechet": true,
+  "msg_frechet_mean": 2.7579,
+  "sgpt_frechet_mean": 3.1952,
+  "seed": 0,
+  "n_reps": 10,
+  "n_sources": 4,
+  "timestamp": "2026-05-12T11:19:45Z"
+}
