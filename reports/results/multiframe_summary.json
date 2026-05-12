@@ -1,56 +1,56 @@
 {
-  "n_reps": 2,
+  "n_reps": 20,
   "seed": 0,
   "ranks": {
     "frechet": {
       "DMP": 1,
       "GPT": 2,
       "HMM_6": 3,
-      "HMM_5": 4,
-      "HMM_7": 4,
-      "TPGMM_5": 4,
-      "TPGMM_6": 4,
-      "TPGMM_7": 4
+      "HMM_7": 3,
+      "TPGMM_6": 5,
+      "HMM_5": 6,
+      "TPGMM_5": 6,
+      "TPGMM_7": 6
     },
     "area": {
       "DMP": 1,
       "GPT": 2,
+      "HMM_6": 3,
       "HMM_7": 3,
-      "HMM_6": 4,
       "HMM_5": 5,
-      "TPGMM_5": 5,
       "TPGMM_6": 5,
-      "TPGMM_7": 5
+      "TPGMM_5": 7,
+      "TPGMM_7": 7
     },
     "dtw": {
       "DMP": 1,
-      "GPT": 1,
+      "GPT": 2,
       "HMM_6": 3,
-      "HMM_7": 4,
-      "HMM_5": 5,
-      "TPGMM_5": 5,
+      "HMM_7": 3,
       "TPGMM_6": 5,
-      "TPGMM_7": 5
+      "HMM_5": 6,
+      "TPGMM_5": 6,
+      "TPGMM_7": 6
     },
     "final_pos": {
-      "HMM_5": 1,
-      "HMM_6": 1,
-      "HMM_7": 1,
-      "TPGMM_5": 1,
-      "TPGMM_6": 1,
-      "TPGMM_7": 1,
-      "DMP": 7,
-      "GPT": 7
+      "DMP": 1,
+      "GPT": 2,
+      "HMM_6": 3,
+      "HMM_7": 3,
+      "TPGMM_5": 3,
+      "TPGMM_6": 3,
+      "HMM_5": 7,
+      "TPGMM_7": 7
     },
     "final_orient": {
-      "GPT": 1,
-      "DMP": 2,
-      "HMM_5": 2,
+      "HMM_5": 1,
       "HMM_6": 2,
-      "HMM_7": 2,
-      "TPGMM_5": 2,
-      "TPGMM_6": 2,
-      "TPGMM_7": 2
+      "DMP": 3,
+      "GPT": 3,
+      "HMM_7": 3,
+      "TPGMM_5": 3,
+      "TPGMM_6": 3,
+      "TPGMM_7": 3
     }
   }
 }
