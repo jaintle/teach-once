@@ -143,6 +143,50 @@ def test_svgp_derivative_raises_not_implemented():
         svgp.predict_with_derivative(np.array([[0.0]]))
 
 
+# --------------------------------------------------------------------------
+# Phase 9: SVGP predict_derivative finite-difference check
+# --------------------------------------------------------------------------
+def test_svgp_derivative_finite_diff():
+    """SVGP predict_derivative mean matches central finite differences.
+
+    Checks that the analytical gradient of the SVGP variational posterior mean
+    is consistent with numerical central differences (h=1e-4), with atol=1e-2.
+    """
+    set_global_seed(0)
+    import warnings
+    # Use a 2-D input to exercise the ARD lengthscales
+    rng = np.random.default_rng(42)
+    N = 80
+    X_train = rng.standard_normal((N, 2)) * 0.5
+    # Simple quadratic target so the GP can learn a non-trivial gradient
+    y_train = X_train[:, 0] ** 2 - 0.5 * X_train[:, 1] + 0.1 * rng.standard_normal(N)
+
+    svgp = SVGPRegressor(n_inducing=16, n_iter_default=50, lr=0.05)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        svgp.fit(X_train, y_train)
+
+    # Test points (a few interior points away from data boundary)
+    X_test = np.array([[0.1, 0.2], [-0.1, 0.3], [0.0, -0.1]])
+    h = 1e-4
+
+    dmean_dx, _ = svgp.predict_derivative(X_test)
+    assert dmean_dx.shape == (3, 2), f"expected (3,2), got {dmean_dx.shape}"
+
+    # Numerical gradient via central differences
+    for i in range(3):
+        for d in range(2):
+            x_plus = X_test[i].copy(); x_plus[d] += h
+            x_minus = X_test[i].copy(); x_minus[d] -= h
+            m_plus = svgp.predict(x_plus[None], return_std=False)[0]
+            m_minus = svgp.predict(x_minus[None], return_std=False)[0]
+            fd_grad = (m_plus - m_minus) / (2 * h)
+            np.testing.assert_allclose(
+                dmean_dx[i, d], fd_grad, atol=1e-2,
+                err_msg=f"SVGP gradient mismatch at test point {i}, dim {d}",
+            )
+
+
 @pytest.fixture(autouse=True)
 def _silence_gpytorch_warnings():
     """gpytorch warns when we predict at training inputs; harmless here."""

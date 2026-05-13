@@ -18,6 +18,9 @@ dependencies = [
     "pyyaml>=6.0",
     "similaritymeasures>=1.1",
     "hmmlearn>=0.3",
+    "gymnasium>=0.29",
+    "mujoco>=3.1",
+    "imageio>=2.33",
 ]
 
 [project.optional-dependencies]

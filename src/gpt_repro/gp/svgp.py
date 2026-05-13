@@ -222,3 +222,92 @@ class SVGPRegressor:
             "SVGPRegressor.predict_with_derivative is not implemented in Phase 1. "
             "It will be added in Phase 4 if required for Sec. V-A's SVGP variant."
         )
+
+    # Phase 9 addition --------------------------------------------------------
+    def predict_derivative(
+        self, X_star: ArrayLike
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        r"""Mean and per-axis std of the GP gradient :math:`\partial f / \partial x`.
+
+        Implements **Eq. (16)** for the SVGP variational posterior.
+
+        The **gradient mean** is computed via :mod:`torch.autograd` differentiated
+        through the variational GP forward pass, exactly as
+        :meth:`ExactGPRegressor.predict_with_derivative` does for the exact
+        posterior.  This approach correctly accounts for the trainable constant
+        mean module and any non-trivial variational whitening.
+
+        The **gradient std** uses the analytical RBF formula with inducing points:
+
+        .. math::
+
+            \text{Var}\!\left(\frac{\partial f}{\partial x_{*,d}}\right)
+            \approx \frac{\sigma_f^2}{\ell_d^2}
+            - v_d^\top K_{ZZ}^{-1} v_d
+
+        where :math:`v_{d,j} = k(x_*, Z_j)(x_{*,d} - Z_{j,d})` (see
+        Rasmussen & Williams 2006 §9.4).
+
+        Parameters
+        ----------
+        X_star : array-like of shape (N_*, D)
+
+        Returns
+        -------
+        dmean_dx : numpy.ndarray of shape (N_*, D) — gradient of posterior mean.
+        dstd_dx  : numpy.ndarray of shape (N_*, D) — std of the gradient r.v.
+        """
+        self._ensure_fit()
+        X_t = _to_2d_tensor(X_star, self._dtype, self._device)
+        N_star, D = X_t.shape
+
+        self.model.eval()
+        self.likelihood.eval()
+
+        # ---- Gradient of mean via autograd --------------------------------
+        # Same pattern as ExactGPRegressor.predict_with_derivative: autograd
+        # through the variational GP forward pass gives the correct gradient
+        # of the variational posterior mean regardless of the mean function.
+        x_star = X_t.clone().detach().requires_grad_(True)
+        with gpytorch.settings.fast_pred_var():
+            f_pred = self.model(x_star)
+            mean_t = f_pred.mean
+        dmean_dx_t = torch.autograd.grad(mean_t.sum(), x_star)[0].detach()
+
+        # ---- Gradient std via inducing-point analytical formula -----------
+        with torch.no_grad():
+            Z = self.model.variational_strategy.inducing_points.detach()  # (M, D)
+            M_ind = Z.shape[0]
+
+            base_kernel = self.model.covar_module.base_kernel
+            outputscale = self.model.covar_module.outputscale      # scalar
+            lengthscale = base_kernel.lengthscale                  # (1, D)
+            inv_ls_sq = 1.0 / (lengthscale ** 2)                  # (1, D)
+
+            # k(X_*, Z)
+            diff = X_t.unsqueeze(1) - Z.unsqueeze(0)              # (N_*, M, D)
+            sqdist = ((diff / lengthscale) ** 2).sum(-1)           # (N_*, M)
+            k_xz = outputscale * torch.exp(-0.5 * sqdist)          # (N_*, M)
+
+            # K_ZZ^{-1} via Cholesky
+            diff_zz = Z.unsqueeze(1) - Z.unsqueeze(0)             # (M, M, D)
+            sq_zz = ((diff_zz / lengthscale) ** 2).sum(-1)         # (M, M)
+            K_ZZ = outputscale * torch.exp(-0.5 * sq_zz)           # (M, M)
+            jitter = 1e-8 * torch.eye(M_ind, dtype=K_ZZ.dtype, device=K_ZZ.device)
+            L_ZZ = torch.linalg.cholesky(K_ZZ + jitter)
+
+            # Var(∂f/∂x_{*,d}) = σ_f² / ℓ_d² − v_d^T K_ZZ^{-1} v_d
+            # ∂²k(x_*,x_*)/∂x_{*,d}² = σ_f² / ℓ_d²  (RBF constant diagonal)
+            k_diag_d2 = outputscale * inv_ls_sq.squeeze(0)         # (D,)
+
+            # v shape (N_*, M, D): v[i,j,d] = k_xz[i,j] * diff[i,j,d]
+            v = k_xz.unsqueeze(-1) * diff                          # (N_*, M, D)
+            v_2d = v.reshape(N_star * D, M_ind)                    # (N_*·D, M)
+            Mv_2d = torch.cholesky_solve(v_2d.t(), L_ZZ).t()       # (N_*·D, M)
+            Mv = Mv_2d.reshape(N_star, D, M_ind)                   # (N_*, D, M)
+
+            quad_d = (v.permute(0, 2, 1) * Mv).sum(-1)             # (N_*, D)
+            var_d = (k_diag_d2.unsqueeze(0) - quad_d).clamp_min(0.0)
+            std_d = var_d.sqrt()
+
+        return dmean_dx_t.cpu().numpy(), std_d.cpu().numpy()

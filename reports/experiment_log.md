@@ -910,3 +910,92 @@ Open questions / deferred work:
   for visualization.
 - No SVGP path for large multi-source point sets (K × N >> few hundred).
 
+---
+
+## Phase 9 — 3D extension: MuJoCo kinematic environments (Sec. V extension)
+
+Date: 2026-05-12
+Paper section(s) implemented: Extension of Sec. IV transport math and Sec. V-B
+generalisation experiments to d=3, plus kinematic MuJoCo environments as
+analogues of the reshelving and arm-pose-following tasks.
+
+Files added/changed:
+- `src/gpt_repro/policies/demos_3d.py` (new) — `make_3d_trajectory`
+  (cubic Bézier in R^3), `make_reshelving_demo`, `make_armpose_demo`,
+  `randomize_reshelving_scene`, `randomize_armpose_scene`.
+- `src/gpt_repro/envs/__init__.py` (new) — `KinematicEndEffectorEnv`,
+  `ReshelvingEnv`, `ArmPoseEnv`.
+- `src/gpt_repro/envs/base_env.py` (new) — `KinematicEndEffectorEnv`:
+  gymnasium.Env wrapper, obs=(3,), action=(3,), kinematics via three
+  MuJoCo slide joints, render() with black-frame fallback.
+- `src/gpt_repro/envs/reshelving_env.py` (new) — `ReshelvingEnv`:
+  object+goal markers, is_success() (0.02 m threshold),
+  get_scene_points() → (8,3).
+- `src/gpt_repro/envs/armpose_env.py` (new) — `ArmPoseEnv`:
+  4 keypoint sphere markers, is_success() (0.03 m threshold),
+  get_scene_points() → (12,3).
+- `src/gpt_repro/transport/rollout_3d.py` (new) — `record_demo_3d`,
+  `transport_and_rollout_3d` (full pipeline: fit PolicyTransport →
+  transport demo → refit GPDynamicalSystem → Euler rollout in env),
+  `evaluate_generalization_3d` (N-trial sweep over randomised scenes).
+- `src/gpt_repro/gp/svgp.py` — added `predict_derivative` method
+  (Phase 9 addition) using variational posterior inducing-point gradient.
+- `src/gpt_repro/viz/viz_3d.py` (new) — `plot_3d_trajectory_pair`,
+  `plot_generalization_trials`.
+- `tests/test_transport_3d.py` (new) — 5 tests: Rodrigues rotation recovery,
+  velocity transport shapes, SO(3) preservation, stiffness PSD symmetry,
+  Jacobian finite-difference consistency.
+- `tests/test_gp.py` — added `test_svgp_derivative_finite_diff`.
+- `tests/test_envs.py` (new) — 6 tests: reset obs shape, zero-action step,
+  success detection, ArmPoseEnv shape, rollout output keys, success_rate ∈ [0,1].
+- `scripts/figure_reshelving_3d.py` (new) — reshelving 3D figure
+  (trajectory pair, success rate bar, error box).
+- `scripts/figure_armpose_3d.py` (new) — arm-pose 3D figure (same panels).
+- `scripts/smoke_phase9.py` (new) — Phase 9 PASS/FAIL smoke test.
+- `requirements.txt` / `pyproject.toml` — added gymnasium>=0.29,
+  mujoco>=3.1, imageio>=2.33.
+- `reports/experiment_log.md` — this entry.
+
+What works:
+- All 5 transport_3d tests pass; 6 env tests pass.
+- SVGP predict_derivative finite-diff test passes (atol=1e-2).
+- Smoke test: ReshelvingEnv 5 steps OK, ArmPoseEnv 5 steps OK,
+  transport_and_rollout_3d on 20-pt demo OK.
+- Installed: mujoco 3.8.1, gymnasium 1.3.0, imageio 2.37.3.
+
+Key design decisions:
+- MuJoCo XML embedded as Python string constants (no external .xml files).
+- Environments are purely kinematic: pos += action * dt; no contact/dynamics.
+- render() catches all exceptions and returns a black 64×64 frame for
+  headless CI compatibility.
+- SVGP predict_derivative uses inducing-point posterior: α = K_ZZ^{-1} m_u,
+  gradient mean = (∂k(x*,Z)/∂x*) α, gradient std from diagonal of
+  K_ZZ^{-1} quadratic form (same RBF derivation as exact GP Phase 5).
+
+Math / equation references implemented:
+- Eqs. (7), (13), (15) — PolicyTransport.transform/transform_velocity/
+  transform_orientation all support d=3 (confirmed by test_3d tests).
+- Eq. (16) — SVGP predict_derivative (inducing-point variational posterior).
+- Sec. V-B style generalisation loop (N=10 randomised scenes) via
+  evaluate_generalization_3d.
+
+Numerical sanity checks passed:
+- LinearTransport recovers Rodrigues rotation (atol=1e-6).
+- Transported 3D velocities shape (N,3), all finite.
+- SO(3) structure preserved by transform_orientation: Rᵀ R ≈ I, det ≈ +1.
+- Stiffness PSD symmetry preserved by transform_stiffness.
+- PolicyTransport Jacobian matches central FD atol=1e-3 in R^3.
+- SVGP gradient mean matches FD atol=1e-2.
+- ReshelvingEnv/ArmPoseEnv obs shape (3,) after reset and step.
+- transport_and_rollout_3d returns rollout_x shape (n_steps+1, 3).
+- evaluate_generalization_3d success_rate ∈ [0, 1].
+
+Open questions / deferred work:
+- Real MuJoCo physics (contact, inertia) deliberately out of scope
+  per CLAUDE.md ("real-robot validation (Sec. VI) is explicitly out of scope").
+- SVGP predict_derivative uses inducing-point K_ZZ^{-1} for variance;
+  the full variational posterior covariance K_ZZ^{-1} + S^{-1} (where S
+  is the variational covariance) would give a tighter bound but is O(M^3).
+- No Phase 10 (surface cleaning extension) implemented.
+
+
