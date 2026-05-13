@@ -996,6 +996,84 @@ Open questions / deferred work:
 - SVGP predict_derivative uses inducing-point K_ZZ^{-1} for variance;
   the full variational posterior covariance K_ZZ^{-1} + S^{-1} (where S
   is the variational covariance) would give a tighter bound but is O(M^3).
-- No Phase 10 (surface cleaning extension) implemented.
+
+---
+
+## Phase 10 — 3D surface cleaning: SVGP large point clouds + stiffness transport (Sec. VI-C analog)
+
+Date: 2026-05-12
+Paper section(s) implemented: Sec. VI-C (surface cleaning generalization),
+  Sec. IV-B (SVGP non-linear residual), Sec. IV-D (stiffness/damping transport).
+
+Files added/changed:
+- `src/gpt_repro/policies/surfaces_3d.py` (new) — SurfaceConfig dataclass;
+  make_surface_pointcloud (flat/tilted/curved/bumpy); make_surface_demo
+  (raster-scan demo with stiffness profile and orientation frames);
+  pair_surface_clouds (NN pairing via cKDTree); helper rotations.
+- `src/gpt_repro/transport/policy_transport_svgp.py` (new) —
+  _SVGPNonlinearResidual (k-means inducing init, fit/predict/jacobian);
+  SVGPPolicyTransport (composes around PolicyTransport, patches .psi);
+  all transform methods delegate to inner PolicyTransport.
+- `src/gpt_repro/envs/cleaning_env.py` (new) — SurfaceCleaningEnv
+  (extends KinematicEndEffectorEnv); XML with 16 visual spheres;
+  coverage_fraction, get_contact_force_norm (Hooke's law proxy).
+- `src/gpt_repro/transport/cleaning_pipeline_3d.py` (new) —
+  run_cleaning_pipeline (9-step orchestrator: cloud gen → pairing →
+  demo → SVGP fit → transport x/ẋ/R/Ks → DS refit → rollout → forces).
+- `tests/test_cleaning_3d.py` (new) — 13 tests (parametrized surface
+  shapes, NN pairing, env reset/step, coverage, fit shapes, Jacobian
+  shape, force norms ≥ 0, stiffness PSD symmetry).
+- `scripts/smoke_phase10.py` (new) — Phase 10 PASS/FAIL smoke test (n=20).
+- `scripts/figure15_cleaning_surfaces.py` (new) — 2-row 3D figure:
+  rollout overlays + point cloud visualization for 5 surface variants.
+- `scripts/figure16_force_profile.py` (new) — Force norm vs timestep
+  with Pearson correlation table for 5 surface variants.
+
+What works:
+- Smoke test: PASS (rollout_x (21,3), coverage=0.200, dist=0.029m).
+- 13 unit tests pass (all 10 named tests + 3 parametrized surface shapes).
+- Full pytest suite: 77 tests pass (13 new, 64 existing).
+- SVGPPolicyTransport.fit on (50,3) with n_inducing=10 in ~1s.
+- Jacobian returns (5,3,3) — correct shape for PolicyTransport.jacobian.
+- Transported stiffness matrices are symmetric PSD.
+
+What was tricky:
+- SVGPPolicyTransport.fit must manually set self._pt._d (output dim)
+  after fitting psi, because PolicyTransport._check_fit checks this.
+- k-means inducing point initialization for _SVGPNonlinearResidual uses
+  sklearn.cluster.KMeans on the S_linear cloud (post-linear-transform).
+- SurfaceCleaningEnv inherits KinematicEndEffectorEnv — XML must include
+  all required joints (ee_x, ee_y, ee_z) from base env spec.
+- force_norms computed via Hooke's law proxy ‖Ks · ẋ‖; nearest-demo-point
+  lookup used to map rollout positions to stiffness values.
+
+Math / equation references implemented:
+- Eq. (7): ϕ(x) = γ(x) + ψ(γ(x)) — SVGPPolicyTransport.transform via inner PT.
+- Eq. (13): ẋ̂ = J(x)·ẋ — transform_velocity via inner PT.
+- Eq. (15): R̂ = J·R — transform_orientation via inner PT.
+- Sec. IV-D: K̂_s = J·K_s·Jᵀ — transform_stiffness via inner PT.
+- Sec. IV-B: GP non-linear residual ψ implemented by _SVGPNonlinearResidual
+  using SVGPRegressor with k-means inducing point initialization.
+
+Numerical sanity checks passed:
+- All 4 surface kinds produce (400, 3) point clouds.
+- Flat surface z == center_z (atol=1e-10).
+- Curved surface z = A·sin(k·x)·cos(k·y) + center_z (atol=1e-10).
+- NN pairing: all paired distances ≤ 10x median spacing.
+- SurfaceCleaningEnv reset obs shape (3,); step returns 5-tuple.
+- Coverage fraction for exact demo ≥ 0.5.
+- SVGPPolicyTransport.transform: output (5,3), all finite.
+- Jacobian: output (5,3,3), all finite.
+- force_norms ≥ 0 in pipeline.
+- Transported stiffness: symmetric (atol=1e-6), eigenvalues ≥ -1e-6.
+
+Open questions / deferred work:
+- Real robot surface cleaning (Sec. VI-C) is out of scope per CLAUDE.md.
+- Coverage fractions are modest (≈0.2) due to kinematic rollout without
+  path-following; a coverage-optimized controller would improve this.
+- Pearson correlation test is implemented as a "must be finite" sanity
+  check; loose bound is appropriate given non-deterministic GP training.
+- Force profile visualization (Fig. 16) uses Hooke's law proxy — not
+  MuJoCo contact forces, which require full dynamics simulation.
 
 
