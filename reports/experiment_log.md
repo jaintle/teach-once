@@ -1077,3 +1077,56 @@ Open questions / deferred work:
   MuJoCo contact forces, which require full dynamics simulation.
 
 
+---
+
+## Phase 11 — Final report, README polish, smoke_all, requirements audit
+
+Date: 2026-05-13
+Paper section(s) implemented: N/A (documentation and reproducibility finalization)
+
+Files added/changed:
+- `README.md` — full rewrite: reproduced-sections table with honest status,
+  complete command listing for all 13 figures, setup instructions, directory
+  structure, "what was simplified" section, citation block.
+- `reports/REPORT.md` — updated: added Overview, Mathematical Implementation,
+  3D Simulation Results (Phases 9–10), expanded Limitations, updated Conclusion.
+  Removed Phase-by-phase prose; replaced with structured results tables.
+- `reports/FIGURE_INDEX.md` (new) — 19-row table mapping every figure file to
+  its generating script, paper figure number, and one-sentence description.
+- `scripts/smoke_all.py` (new) — subprocess-based runner for all 10 smoke scripts
+  with per-smoke PASS/FAIL + elapsed time; saves output to
+  `reports/results/smoke_all_output.txt`.
+- `reports/results/smoke_all_output.txt` (new) — output of smoke_all.py run.
+- `requirements.txt` — pinned all versions to actual installed versions;
+  added `pytest-cov==7.1.0`; removed `>=` bounds.
+
+Figures that needed no metadata fix:
+None. All 16 expected figure files existed with titles, axis labels, and legends
+where applicable. No regeneration was required.
+
+Missing outputs regenerated:
+None. All expected figure and result files were present.
+
+Final pytest result:
+77 passed, 2 warnings in 16.26s
+
+Final smoke_all result:
+10/10 smoke tests passed
+(Phase 1: 4.0s, Phase 2: 2.9s, Phase 3: 1.9s, Phase 4: 4.5s, Phase 5: 3.4s,
+ Phase 6: 5.6s, Phase 7: 11.4s, Phase 8: 5.1s, Phase 9: 2.0s, Phase 10: 3.2s)
+
+Last-minute bugs found and fixed:
+None. All existing code passed smoke tests without modification.
+
+What works:
+- All 10 smoke scripts pass end-to-end on the installed environment.
+- 77 unit + integration tests pass.
+- All 16 expected figures exist in reports/figures/.
+- All required CSVs/JSONs exist in reports/results/.
+- README commands are copy-pasteable from a clean clone (pip install -e ".[dev]").
+
+Open questions / deferred work:
+- Phase 10 figures (Fig. 15/16) were not regenerated in this phase to avoid
+  long runtimes; existing files from Phase 10 are used.
+- smoke_all.py uses subprocess + .venv/bin/python path; on Windows the path
+  separator would differ (.venv/Scripts/python.exe).
