@@ -163,3 +163,34 @@ def get_armpose_waypoints(
         retreat,
     ], dtype=float)
     return waypoints  # (7, 3)
+
+
+# ---------------------------------------------------------------------------
+# Task-specific stiffness matrices — Phase 16
+# ---------------------------------------------------------------------------
+
+def get_reshelving_stiffness() -> np.ndarray:
+    """Return diagonal stiffness matrix for the reshelving task.
+
+    Isotropic high stiffness for precise pick-and-place (Sec. IV-D).
+    Returns K_s of shape (3, 3).
+    """
+    return np.diag([300.0, 300.0, 300.0])
+
+
+def get_cleaning_stiffness() -> np.ndarray:
+    """Return diagonal stiffness matrix for the cleaning task.
+
+    Lower z-stiffness allows compliance along surface normal (Sec. IV-D).
+    Returns K_s of shape (3, 3).
+    """
+    return np.diag([150.0, 150.0, 50.0])
+
+
+def get_armpose_stiffness() -> np.ndarray:
+    """Return diagonal stiffness matrix for the arm-pose task.
+
+    Isotropic medium stiffness for smooth keypoint tracing (Sec. IV-D).
+    Returns K_s of shape (3, 3).
+    """
+    return np.diag([200.0, 200.0, 200.0])

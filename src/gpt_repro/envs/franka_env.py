@@ -281,7 +281,7 @@ class FrankaKinematicEnv(gymnasium.Env):
 
         Parameters
         ----------
-        name : str — one of "front", "side", "top".
+        name : str — one of "front", "side", "top", "quarter".
         """
         if name not in CAMERAS:
             raise ValueError(f"Unknown camera {name!r}. Choose from {list(CAMERAS)}")

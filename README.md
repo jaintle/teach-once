@@ -85,12 +85,25 @@ python scripts/animate_cleaning.py   --seed 0
 These animations show a Franka Panda arm generalizing tasks to new scene
 configurations using GPT (200-step rollout, velocity-rescaled GP DS).
 
+### Best-scene highlight reel (1440×360, 3-panel)
+
+![highlight reel best](reports/figures/highlight_reel_best.gif)
+
+`python scripts/animate_highlight_reel_best.py`
+
+| Task | Best-scene GIF | Command |
+|------|----------------|---------|
+| Reshelving (front cam, scene 2 success) | ![reshelving](reports/figures/franka_reshelving_best.gif) | `python scripts/animate_reshelving_best.py` |
+| Cleaning (quarter cam, red EE trail) | ![cleaning](reports/figures/franka_cleaning_best.gif) | `python scripts/animate_cleaning_best.py` |
+| Arm-pose (side cam, large spheres) | ![armpose](reports/figures/franka_armpose_best.gif) | `python scripts/animate_armpose_best.py` |
+
+**Multi-scene comparison GIFs** (2×2 grid, all 4 scenes):
+
 | Task | Preview | Command |
 |------|---------|---------|
 | Reshelving | ![reshelving](reports/figures/franka_reshelving.gif) | `python scripts/animate_franka_reshelving.py` |
 | Surface Cleaning | ![cleaning](reports/figures/franka_cleaning.gif) | `python scripts/animate_franka_cleaning.py` |
 | Arm-pose Following | ![armpose](reports/figures/franka_armpose.gif) | `python scripts/animate_franka_armpose.py` |
-| Highlight Reel | ![reel](reports/figures/highlight_reel.gif) | `python scripts/animate_highlight_reel.py` |
 
 > The arm uses kinematic IK control (no physics simulation).
 > GPT plans end-effector trajectories; IK converts to joint angles.

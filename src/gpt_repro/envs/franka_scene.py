@@ -37,9 +37,11 @@ _PANDA_XML = FRANKA_ASSETS_DIR / "panda_with_site.xml"
 
 # Each entry: (lookat_xyz, distance, elevation_deg, azimuth_deg)
 CAMERAS = {
-    "front": (np.array([0.4, 0.0, 0.65]), 1.8, -25.0, 180.0),
-    "side":  (np.array([0.4, 0.0, 0.65]), 1.8, -20.0, 90.0),
-    "top":   (np.array([0.4, 0.0, 0.5]), 1.5, -65.0, 180.0),
+    "front":   (np.array([0.4, 0.0, 0.65]), 1.8, -25.0, 180.0),
+    "side":    (np.array([0.4, 0.0, 0.65]), 1.8, -20.0, 90.0),
+    "top":     (np.array([0.4, 0.0, 0.5]), 1.5, -65.0, 180.0),
+    # 3/4 angle: arm AND surface visible simultaneously
+    "quarter": (np.array([0.45, 0.15, 0.65]), 1.6, -35.0, 225.0),
 }
 
 
@@ -114,17 +116,28 @@ def _cleaning_surface_xml(pos: tuple = (0.5, 0.0, 0.62)) -> str:
     )
 
 
-def _armpose_spheres_xml() -> str:
-    """Four coloured keypoint spheres for arm-pose task."""
+def _armpose_spheres_xml(large: bool = False) -> str:
+    """Four coloured keypoint spheres for arm-pose task.
+
+    Parameters
+    ----------
+    large : bool
+        If True, use larger radii (0.06/0.05/0.04/0.04) for the
+        "best scene" single-scene render so spheres are clearly visible.
+    """
+    if large:
+        r0, r1, r2, r3 = 0.060, 0.050, 0.040, 0.040
+    else:
+        r0, r1, r2, r3 = 0.030, 0.022, 0.018, 0.015
     return (
-        '    <geom name="kp_shoulder" type="sphere" size="0.030"\n'
-        '          pos="0.35 0.0 0.70" rgba="0.0 0.9 0.9 0.9"/>\n'
-        '    <geom name="kp_elbow"    type="sphere" size="0.022"\n'
-        '          pos="0.47 0.0 0.80" rgba="0.9 0.0 0.9 0.9"/>\n'
-        '    <geom name="kp_wrist"    type="sphere" size="0.018"\n'
-        '          pos="0.57 0.0 0.75" rgba="1.0 0.9 0.0 0.9"/>\n'
-        '    <geom name="kp_hand"     type="sphere" size="0.015"\n'
-        '          pos="0.62 0.0 0.65" rgba="0.2 0.4 0.9 0.9"/>\n'
+        f'    <geom name="kp_shoulder" type="sphere" size="{r0:.3f}"\n'
+        f'          pos="0.35 0.0 0.70" rgba="0.0 0.9 0.9 0.9"/>\n'
+        f'    <geom name="kp_elbow"    type="sphere" size="{r1:.3f}"\n'
+        f'          pos="0.47 0.0 0.80" rgba="0.9 0.0 0.9 0.9"/>\n'
+        f'    <geom name="kp_wrist"    type="sphere" size="{r2:.3f}"\n'
+        f'          pos="0.57 0.0 0.75" rgba="1.0 0.9 0.0 0.9"/>\n'
+        f'    <geom name="kp_hand"     type="sphere" size="{r3:.3f}"\n'
+        f'          pos="0.62 0.0 0.65" rgba="0.2 0.4 0.9 0.9"/>\n'
     )
 
 
@@ -138,6 +151,7 @@ def build_scene_xml(
     shelf_pos: tuple = (0.0, 0.6, 0.8),
     object_pos: tuple = (0.5, 0.0, 0.65),
     camera_configs: Optional[list] = None,
+    large_kp_spheres: bool = False,
 ) -> str:
     """Build a complete MuJoCo XML string for the given task.
 
@@ -168,7 +182,7 @@ def build_scene_xml(
         surf_pos = (table_pos[0], table_pos[1], table_pos[2] + 0.022)
         task_geoms += _cleaning_surface_xml(pos=surf_pos)
     elif task == "armpose":
-        task_geoms += _armpose_spheres_xml()
+        task_geoms += _armpose_spheres_xml(large=large_kp_spheres)
     else:
         raise ValueError(f"Unknown task: {task!r}. Must be reshelving, cleaning, or armpose.")
 

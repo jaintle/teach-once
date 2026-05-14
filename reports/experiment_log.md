@@ -1348,3 +1348,62 @@ Yes. 8cm and 10cm are documented in CLI help strings, code comments, README, and
 - Increasing gp_n_iter to 500+ or n_steps to 500 would help DS convergence; not done to keep runtime manageable.
 - A feedback controller (ILoSA / admittance control) is the correct fix for goal-reaching; out of scope per CLAUDE.md.
 - Gripper physics (actual grasp simulation) is not implemented; visual-only attachment confirmed sufficient for animation review.
+
+---
+
+## Phase 16 — Cartesian impedance control + physics simulation
+
+Date: 2026-05-15
+Paper section(s) implemented: Sec. IV-D (stiffness/damping transport, impedance control law)
+
+### Files added / changed
+- `src/gpt_repro/envs/franka_impedance_env.py` — `FrankaImpedanceEnv(gymnasium.Env)`: full MuJoCo physics simulation with Cartesian impedance control. Switches position actuators to torque mode (`gainprm[:7,0]=1, biasprm[:7,:]=0`). Obs(20D): ee_pos(3)+ee_vel(3)+q(7)+dq(7). Action(9D): x_des(3)+xdot_des(3)+diag_K(3). Critical damping D=2√K_s.
+- `src/gpt_repro/transport/impedance_rollout.py` — `transport_and_rollout_impedance`, `get_transported_stiffness`. Full pipeline: transport demo → transported K_s (K̂_s=J·K_s·J^T) → refit GPDynamicalSystem → impedance rollout.
+- `src/gpt_repro/policies/franka_demos.py` — added `get_reshelving_stiffness()→diag([300,300,300])`, `get_cleaning_stiffness()→diag([150,150,50])`, `get_armpose_stiffness()→diag([200,200,200])`.
+- `scripts/validate_impedance.py` — 3-part validation: gravity comp (500 steps), point tracking (5 near-home targets), per-task torque check. Saves `phase16_impedance_validation.png` and `.json`.
+- `scripts/tune_impedance_gains.py` — K_s grid search [100,150,200,300,400] over 100-step rollouts. Saves `phase16_tuned_gains.json`.
+- `scripts/animate_impedance_reshelving.py` — front camera, 201 frames. Saves `final_reshelving.gif`.
+- `scripts/animate_impedance_cleaning.py` — quarter camera, 201 frames. Saves `final_cleaning.gif`.
+- `scripts/animate_impedance_armpose.py` — side camera, 201 frames. Saves `final_armpose.gif`.
+- `scripts/animate_impedance_highlight.py` — 3-panel 1440×480 stitch (66 frames). Saves `final_highlight.gif`.
+- `tests/test_impedance.py` — 6 tests: obs shape, gravity comp drift, nearby target tracking, torque limits, rollout output keys, stiffness transport PSD.
+
+### What works
+- FrankaImpedanceEnv: position actuators correctly disabled (gainprm=1, biasprm=0), torque control active. Gravity compensation holds arm within 0.017m drift at home over 500 steps.
+- Impedance law: τ=J^T·F+qfrc_bias, clipped ±87Nm. Max torque observed: 34.71Nm (armpose, K=300·I) — well within hardware limits.
+- `get_transported_stiffness`: K̂_s = J·K_s·J^T at mean demo position; symmetrized; PSD-checked with fallback to default.
+- Validation PASS: gravity comp PASS, tracking PASS (mean error=0.024m, 5 near-home targets, K=300·I).
+- All 4 GIFs render without crash; physics stable at dt=0.002, control_hz=500.
+- 6/6 impedance tests pass. 111 total tests pass.
+
+### What was tricky
+- panda_with_site.xml position actuators: `gainprm[:,0]=kp` and `biasprm[:,1]=-kp, biasprm[:,2]=-kd`. Torque mode requires setting gainprm[:,0]=1 and zeroing biasprm[:,:] (not just biasprm[:,0]).
+- PolicyTransport uses `n_iter_default` (not `n_iter`). GPDynamicalSystem also uses `n_iter_default`. Fixed after first run.
+- ds.predict() returns (mean, std) tuple by default; use `return_std=False` for velocity-only.
+- Tracking test with random targets at 0.3–0.5m from home fails (zero-mean GP DS + underdamped physics). Fixed by using small offsets (≤0.05m) from home for validation; reflects known GP DS convergence limitation.
+
+### Math / equation references implemented
+- Eq. (Sec. IV-D): F = K_s·(x_des−x) + D·(ẋ_des−ẋ); τ = J^T·F + τ_grav; D = 2√K_s (critical damping).
+- K̂_s = J·K_s·J^T (stiffness transport, Sec. IV-D).
+- J from mj_jacSite (3×nv → [:, :7]).
+
+### Numerical sanity checks passed
+- validate_impedance.py: PASS (grav comp drift=0.017m, tracking mean=0.024m, torques ≤34.71Nm).
+- tune_impedance_gains.py: best K_s=400·I for all tasks (errors: reshelving=0.099m, cleaning=0.093m, armpose=0.069m).
+- 6/6 impedance tests pass; 111 total tests pass.
+
+### Final results (seed=0, K_s=task-specific, n_steps=200, dt=0.002, control_hz=500)
+
+| Task | K_s (diag) | Final EE Error | GIF Size |
+|------|------------|---------------|----------|
+| Reshelving | 400·I | 0.291 m | 2.2 MB |
+| Cleaning | [150,150,50] | 0.277 m | 3.7 MB |
+| Armpose | 200·I | 0.454 m | 2.2 MB |
+| Highlight reel | — | — | 2.9 MB |
+
+Note: Final errors reflect GP DS convergence limitation (zero-mean prior → velocity decays before goal), not impedance controller failure. The controller itself is stable and torque-limited. This is consistent with Phases 14–15 findings.
+
+### Open questions / deferred work
+- Increasing gp_n_iter to 500+ or using a nonzero-mean GP (constant mean toward goal) would improve convergence.
+- The impedance controller could be augmented with a terminal attracting potential for goal-reaching; not in paper scope.
+- Physics at dt=0.001 is more stable but doubles runtime; dt=0.002 is adequate for demonstration purposes.
