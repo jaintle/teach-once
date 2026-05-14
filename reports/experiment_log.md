@@ -1186,3 +1186,50 @@ None (Phase 12 is purely a visualisation layer).
 - MP4 generation requires `pip install imageio-ffmpeg`; documented in README.
 - Animations are kinematic only (point-mass EE, no articulated arm visuals).
 - GIF file sizes not validated in CI; manual check recommended after full-resolution runs.
+
+---
+
+## Phase 13 — Franka Panda arm + IK environment
+
+Date: 2026-05-14
+Paper section(s) implemented: Sec. VI (robot hardware context); IK underpins all policy-transport experiments.
+
+### Files added / changed
+- `src/gpt_repro/envs/assets/franka/panda_with_site.xml` — panda.xml patched with EE `attachment_site` in `<body name="hand">`.
+- `src/gpt_repro/envs/assets/franka/assets/` — 59 .obj visual meshes + STL collision meshes (from mujoco_menagerie).
+- `src/gpt_repro/envs/franka_scene.py` — `build_scene_xml(task)` and `load_scene_model(xml)`.
+- `src/gpt_repro/envs/ik_solver.py` — `IKSolver` (damped Jacobian pseudoinverse, nullspace joint centering) + `interpolate_joint_trajectory`.
+- `src/gpt_repro/envs/franka_env.py` — `FrankaKinematicEnv(gymnasium.Env)` with IK step, programmatic camera, set_ee_pos / set_qpos.
+- `scripts/validate_franka_ik.py` — 20-target IK benchmark, 4×5 render grid, 3D workspace scatter.
+- `scripts/render_scenes.py` — 3-camera static renders for all 3 tasks.
+- `scripts/smoke_phase13.py` — end-to-end smoke test (36 checks, all pass).
+- `tests/test_franka_env.py` — 15 unit tests (3 parametrised task tests + 12 env/IK tests).
+
+### What works
+- Full MuJoCo 3.8.1 scene with Franka Panda arm (panda_with_site.xml included via `<include>`) loads for all 3 tasks.
+- Jacobian pseudoinverse IK (damped LS + nullspace): 100% success rate over 20 random workspace targets, mean error 0.28 mm.
+- All 3 camera presets (front/side/top) render non-black frames at (480, 720, 3).
+- `FrankaKinematicEnv` passes gymnasium.Env interface (reset/step/render/close).
+- Total test count: 97 passed (was 82 before Phase 13, +15 new tests).
+
+### What was tricky
+- `<light specular="...">` is invalid in MuJoCo 3.x — the attribute is a scalar in some versions and rgb3 in others. Fixed by removing `specular` from `<light>` tags.
+- Relative `meshdir="assets"` in panda_with_site.xml fails when the XML is loaded via `from_xml_string` (no base directory). Fixed by writing a temp file to `FRANKA_ASSETS_DIR` and loading with `from_xml_path`.
+- `autolimits="true"` required in outer scene `<compiler>` for MuJoCo 3.x joint limit handling.
+
+### Math / equation references
+- Jacobian pseudoinverse IK with nullspace projection: Nakamura & Hanafusa (1986); Buss (2004).
+- `mujoco.mj_jacSite` → (3, nv) position Jacobian; extract arm DOF columns `[:, :7]`.
+- `mujoco.mj_fwdPosition` for kinematic update inside IK loop (cheaper than `mj_forward`).
+
+### Numerical sanity checks passed
+- IK success rate: 100% over 20 random targets in workspace [0.28–0.70] × [-0.35–0.35] × [0.45–0.90] m.
+- Mean IK position error: 0.28 mm (threshold: 5 mm).
+- Joint limits respected after every IK solve (checked in test_joint_limits).
+- test_ik_identity: solving IK for the current home EE returns < 2 mm error.
+
+### Open questions / deferred work
+- Orientation IK (`target_quat`) is implemented but not benchmarked; only position IK used in Phase 13.
+- Kinematic environment by design — gravity is defined but physics not integrated.
+- No collision avoidance in the IK loop.
+- Articulated-arm animation GIFs deferred to Phase 14.
