@@ -133,6 +133,7 @@ def transport_and_rollout_franka(
     gp_n_iter: int = 100,
     seed: int = 0,
     success_threshold: float = 0.08,
+    attractor_gain: float = 1.0,
 ) -> dict:
     """Transport a Franka demo to a new scene and roll it out with GPT.
 
@@ -189,6 +190,9 @@ def transport_and_rollout_franka(
     ds = GPDynamicalSystem(gp_cls=gp_cls, n_iter_default=gp_n_iter)
     ds.fit(x_t, xd_t)
 
+    # Goal for the attractor: last transported demo waypoint
+    x_goal = x_t[-1]
+
     # Velocity rescaling: compensate for GP attenuation at low iteration counts
     _pred_v, _ = ds.predict(x_t, return_std=True)
     demo_v_norm = float(np.linalg.norm(xd_t, axis=1).mean()) + 1e-8
@@ -218,6 +222,8 @@ def transport_and_rollout_franka(
         vel_cmd = ds.predict(obs[np.newaxis], return_std=False)
         if vel_cmd.ndim == 2:
             vel_cmd = vel_cmd[0]
+        # Attractor term: K * (x_goal - x), added after GP prediction (Sec. III-A)
+        vel_cmd = vel_cmd + attractor_gain * (x_goal - obs)
 
         x_next = obs + (vel_cmd * velocity_scale) * dt
         # Clamp BEFORE IK (per spec)

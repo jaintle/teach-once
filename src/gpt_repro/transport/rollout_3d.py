@@ -81,6 +81,7 @@ def transport_and_rollout_3d(
     n_steps: int = 150,
     gp_n_iter: int = 100,
     seed: int = 0,
+    attractor_gain: float = 0.0,
 ) -> dict:
     """Transport a 3-D demonstration to a new scene and roll it out.
 
@@ -143,6 +144,7 @@ def transport_and_rollout_3d(
     ds.fit(x_transported, xdot_transported)
 
     # -- 5: Euler rollout in env -----------------------------------------
+    x_goal_3d = x_transported[-1]
     init_pos = x_transported[0]
     obs, _ = env.reset(options={"init_pos": init_pos})
     positions = [obs.copy()]
@@ -150,6 +152,9 @@ def transport_and_rollout_3d(
         vel_cmd = ds.predict(obs, return_std=False)
         if vel_cmd.ndim == 2:
             vel_cmd = vel_cmd[0]
+        # Optional attractor term (Sec. III-A)
+        if attractor_gain > 0.0:
+            vel_cmd = vel_cmd + attractor_gain * (x_goal_3d - obs)
         obs, _, _, _, _ = env.step(vel_cmd)
         positions.append(obs.copy())
 

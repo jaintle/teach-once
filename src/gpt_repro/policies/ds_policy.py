@@ -189,6 +189,8 @@ class GPDynamicalSystem:
         x0: ArrayLike,
         dt: float = 0.05,
         n_steps: int = 200,
+        x_goal: Optional[ArrayLike] = None,
+        attractor_gain: float = 1.0,
         stop_eps: Optional[float] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Forward-Euler integration of the learned DS from ``x0``.
@@ -197,6 +199,15 @@ class GPDynamicalSystem:
         Eq. (1):
 
             :math:`x_{k+1} = x_k + dt \\cdot f(x_k)`
+
+        An optional linear attractor term can be added after the GP
+        prediction to prevent the zero-mean prior from stalling the
+        rollout far from the goal (ILoSA framework, Sec. III-A [25]):
+
+            :math:`v = f(x) + K(x_{goal} - x)`
+
+        The attractor does NOT pass through the GP; it is added to the
+        predicted velocity after prediction.
 
         Parameters
         ----------
@@ -208,6 +219,12 @@ class GPDynamicalSystem:
         n_steps : int
             Number of Euler steps. The returned trajectory has
             ``n_steps + 1`` states.
+        x_goal : (d,) array, optional
+            Goal state for the linear attractor term. If ``None``, no
+            attractor is applied.
+        attractor_gain : float
+            Gain K for the linear attractor ``K * (x_goal - x)``.
+            Default 1.0. Ignored when ``x_goal`` is ``None``.
         stop_eps : float, optional
             Early-stopping threshold: if ``||f(x_k)|| < stop_eps`` the
             integration halts and the remaining states are padded with
@@ -230,6 +247,11 @@ class GPDynamicalSystem:
             raise ValueError(
                 f"x0 has shape {x.shape}, expected ({self._d},)"
             )
+        _x_goal = (
+            np.asarray(x_goal, dtype=float).reshape(-1)
+            if x_goal is not None
+            else None
+        )
 
         traj = np.empty((n_steps + 1, self._d))
         stds = np.empty((n_steps + 1, self._d))
@@ -238,7 +260,9 @@ class GPDynamicalSystem:
         # well-defined at index 0.
         v0, s0 = self.predict(x[None, :], return_std=True)
         stds[0] = s0[0]
-        v = v0[0]
+        v_gp = v0[0]
+        # Add attractor term (ILoSA, Sec. III-A [25]): v = f(x) + K*(x_goal - x)
+        v = v_gp + attractor_gain * (_x_goal - x) if _x_goal is not None else v_gp
 
         for k in range(n_steps):
             if stop_eps is not None and np.linalg.norm(v) < stop_eps:
@@ -247,8 +271,10 @@ class GPDynamicalSystem:
                 stds[k + 1 :] = stds[k]
                 break
             traj[k + 1] = traj[k] + dt * v
-            v_next, s_next = self.predict(traj[k + 1][None, :], return_std=True)
+            v_gp_next, s_next = self.predict(traj[k + 1][None, :], return_std=True)
             stds[k + 1] = s_next[0]
-            v = v_next[0]
+            v_gp = v_gp_next[0]
+            # Attractor added AFTER GP prediction (not through GP)
+            v = v_gp + attractor_gain * (_x_goal - traj[k + 1]) if _x_goal is not None else v_gp
 
         return traj, stds

@@ -3,7 +3,7 @@
 Records a raster-scan cleaning demo on the Franka arm, transports it to
 4 surface variants via GPT, and renders a 2×2 GIF/MP4 with:
   - EE colour coded by estimated contact force (Hooke proxy).
-  - Camera switch: front for first half, top for second half.
+  - Top-down camera for all frames — raster-scan pattern clearly visible.
 
 CLI args: --seed, --n_scenes, --fps, --width, --height, --out_dir,
           --gp_n_iter, --n_steps
@@ -132,11 +132,15 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
     ik_fails = 0
     n_steps = args.n_steps
 
+    # Goal for attractor: last transported demo waypoint
+    x_goal_clean = x_t[-1]
     for step_i in range(n_steps):
         obs = xs[-1]
         vel = ds.predict(obs[np.newaxis], return_std=False)
         if vel.ndim == 2:
             vel = vel[0]
+        # Linear attractor (lower gain — cleaning is path task, not point task)
+        vel = vel + 0.8 * (x_goal_clean - obs)
         x_next = np.clip(obs + (vel * velocity_scale) * 0.05, ws_lo, ws_hi)
         _, _, _, _, info = env.step(x_next)
         if not info["ik_success"]:
@@ -149,14 +153,10 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
     xdots_est = np.diff(rollout_x, axis=0)
     speed     = np.linalg.norm(np.vstack([xdots_est, xdots_est[-1:]]), axis=1)
 
-    # Re-render with smoothed joints + camera switch + force colour
+    # Re-render with smoothed joints — top camera only (raster-scan visible overhead)
     frames = []
-    # Front camera: first 40% (approach + initial strokes visible)
-    # Top camera: remaining 60% (overhead coverage view)
-    switch_fi = int(len(q_smooth) * 0.40)
+    env.set_camera("top")
     for fi, q in enumerate(q_smooth):
-        cam = "front" if fi < switch_fi else "top"
-        env.set_camera(cam)
         env.set_qpos(q)
 
         # Force colour via EE speed (Hooke proxy)
@@ -173,7 +173,7 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
         if frame is not None:
             frame = add_text_overlay(
                 frame,
-                f"S{scene_idx+1} {cam} | spd:{force_val:.3f}",
+                f"S{scene_idx+1} top | spd:{force_val:.3f}",
                 pos=(8, 24), font_scale=0.50,
             )
             progress = fi / max(1, len(q_smooth) - 1)

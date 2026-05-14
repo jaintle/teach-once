@@ -127,6 +127,7 @@ def main():
             demo=base_demo, S=S, T=T, env=env,
             gp_n_iter=args.gp_n_iter, n_steps=args.n_steps,
             success_threshold=args.success_threshold,
+            attractor_gain=1.2,
             seed=args.seed + i,
         )
         print(f"  err={res['final_error']:.3f}m  ik_fail={res['ik_fail_rate']*100:.0f}%")

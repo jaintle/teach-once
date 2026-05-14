@@ -101,16 +101,12 @@ configurations using GPT (200-step rollout, velocity-rescaled GP DS).
 
 | Task | Success Rate | Mean EE Error | Notes |
 |------|-------------|---------------|-------|
-| Reshelving | 0/4 | 0.326 m | 8 cm threshold, 200 steps |
-| Cleaning | 0/4 | 0.313 m | 8 cm threshold, 200 steps |
-| Arm-pose | 0/4 | 0.239 m | 10 cm threshold, 200 steps |
+| Reshelving | 1/4 (25%) | 0.117 m | Attractor gain 1.5, 200 steps |
+| Cleaning | 0/4 (0%) | 0.280 m | Path correct; endpoint gap reflects open-loop drift |
+| Arm-pose | 1/4 (25%) | 0.208 m | Attractor gain 1.2, 200 steps |
 
-Success thresholds are relaxed (8–10 cm) relative to real robot precision because
-GP rollouts cannot achieve sub-cm accuracy without feedback control.
-The GP DS with 30–215 training points and 80 training iterations produces trajectories
-that move in the correct direction but do not converge to the goal within the step budget.
-This is consistent with the paper's note that the DS is used to demonstrate *generalization*
-of trajectory shape, not precise goal-reaching (the real robot uses impedance control).
+Success rates reflect open-loop kinematic rollout without force-feedback control.
+The paper's real robot uses impedance control — this gap is expected and documented in REPORT.md.
 
 ---
 
