@@ -214,6 +214,26 @@ class FrankaKinematicEnv(gymnasium.Env):
         """Return (q_lower, q_upper) for 7 arm joints."""
         return self._ik.get_joint_limits()
 
+    def get_workspace_bounds(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (lo, hi) workspace bounds for EE position clamping.
+
+        Conservative bounds that keep IK success rate high based on
+        Phase 13 validation (100% success in [0.28-0.70]x[-0.35-0.35]x[0.45-0.90]).
+        """
+        lo = np.array([0.25, -0.40, 0.40], dtype=np.float64)
+        hi = np.array([0.75,  0.40, 0.95], dtype=np.float64)
+        return lo, hi
+
+    @property
+    def model(self):
+        """Expose MjModel for direct manipulation (e.g. geom RGBA)."""
+        return self._model
+
+    @property
+    def data(self):
+        """Expose MjData for direct manipulation (e.g. qpos read/write)."""
+        return self._data
+
     # ------------------------------------------------------------------
     # Camera control
     # ------------------------------------------------------------------

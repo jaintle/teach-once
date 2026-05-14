@@ -1233,3 +1233,53 @@ Paper section(s) implemented: Sec. VI (robot hardware context); IK underpins all
 - Kinematic environment by design — gravity is defined but physics not integrated.
 - No collision avoidance in the IK loop.
 - Articulated-arm animation GIFs deferred to Phase 14.
+
+---
+
+## Phase 14 — GPT trajectory replay on Franka arm + animations
+
+Date: 2026-05-14
+Paper section(s) implemented: Sec. IV-C (refit f̂ on transported labels), Sec. V-A/B/C (evaluation in 3D with articulated arm).
+
+### Files added / changed
+- `src/gpt_repro/envs/franka_env.py` — added `get_workspace_bounds()`, `model` and `data` properties.
+- `src/gpt_repro/transport/franka_rollout.py` — `record_franka_demo`, `transport_and_rollout_franka` (with Gaussian joint smoothing), `evaluate_franka_generalization`.
+- `src/gpt_repro/policies/franka_demos.py` — `get_reshelving_waypoints`, `get_cleaning_waypoints`, `get_armpose_waypoints`.
+- `src/gpt_repro/viz/frame_annotate.py` — `add_text_overlay`, `add_title_bar`, `colormap_scalar` (cv2/Pillow/numpy fallback chain).
+- `scripts/animate_franka_reshelving.py`
+- `scripts/animate_franka_cleaning.py`
+- `scripts/animate_franka_cleaning.py` — includes camera switch (front→top mid-animation) and force colour coding.
+- `scripts/animate_franka_armpose.py`
+- `scripts/animate_highlight_reel.py`
+- `scripts/smoke_phase14.py`
+- `tests/test_franka_rollout.py` — 8 tests.
+- `pyproject.toml` — added `viz = ["opencv-python>=4.8"]` optional dep.
+- `README.md` — added "Portfolio Animations (Franka Panda)" section.
+
+### What works
+- IK demo recording: 100% IK success rate across all demo waypoints.
+- IK fail rate during GPT rollout: 0% for all tasks (workspace clamping before IK prevents out-of-range targets).
+- Gaussian joint smoothing (sigma=1.5) applied at render time reduces jitter without affecting metric computation.
+- Frame annotation (Pillow backend, cv2 not installed): add_text_overlay and add_title_bar produce correct shapes.
+- GIF/MP4 export works for all 4 scripts.
+- Total test count: 105 passed (was 97, +8 new tests).
+
+### Per-task summary
+- Reshelving: success=0% / mean EE error=0.267m / IK fail=0.0% / GIF=206 KB
+- Cleaning:   success=0% / mean EE error=0.240m / IK fail=0.0% / GIF=316 KB
+- Arm-pose:   success=0% / mean EE error=0.357m / IK fail=0.0% / GIF=206 KB
+- Highlight reel: 0.2 MB (under 15MB budget).
+
+### Notes on success rates
+GPT DS rollout with 30–35 demo points and gp_n_iter=80 does not converge to the goal region (threshold 0.1m) in 80 steps. This is consistent with Phase 9 findings for short demos — the GP DS requires either more training data or more iterations to achieve tight convergence. The IK layer itself is working correctly (0% fail rate, sub-mm errors). GPT vs point-mass comparison: both exhibit similar final errors, indicating the bottleneck is GP DS quality, not IK.
+
+### GIF file sizes (all under budget)
+- franka_reshelving.gif: 206 KB (budget 5MB ✓)
+- franka_cleaning.gif: 316 KB (budget 8MB ✓)
+- franka_armpose.gif: 206 KB (budget 5MB ✓)
+- highlight_reel.gif: 0.2 MB (budget 15MB ✓)
+
+### Open questions / deferred work
+- Increase gp_n_iter to 200+ and n_steps to 200 to improve DS convergence.
+- Joint smoothing sigma=1.5 is conservative; could use 2.0 for smoother animations.
+- Camera switching in cleaning (front→top) confirmed working but mid-rollout switch shows visible jump in camera angle.

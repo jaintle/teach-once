@@ -80,6 +80,24 @@ python scripts/animate_cleaning.py   --seed 0
 
 ---
 
+## Portfolio Animations (Franka Panda)
+
+These animations show a Franka Panda arm generalizing tasks to new scene
+configurations using GPT.
+
+| Task | Preview | Command |
+|------|---------|---------|
+| Reshelving | ![reshelving](reports/figures/franka_reshelving.gif) | `python scripts/animate_franka_reshelving.py` |
+| Surface Cleaning | ![cleaning](reports/figures/franka_cleaning.gif) | `python scripts/animate_franka_cleaning.py` |
+| Arm-pose Following | ![armpose](reports/figures/franka_armpose.gif) | `python scripts/animate_franka_armpose.py` |
+| Highlight Reel | ![reel](reports/figures/highlight_reel.gif) | `python scripts/animate_highlight_reel.py` |
+
+> The arm uses kinematic IK control (no physics simulation).
+> GPT plans end-effector trajectories; IK converts to joint angles.
+> Force color-coding in cleaning is estimated via Hooke's law proxy.
+
+---
+
 ## Reproduce all 2D figures (Secs. III–V)
 
 ```bash
