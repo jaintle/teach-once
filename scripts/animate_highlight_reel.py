@@ -40,7 +40,7 @@ def parse_args():
     p.add_argument("--fps",       type=int, default=10)
     p.add_argument("--out_dir",   default="reports/figures/")
     p.add_argument("--gp_n_iter", type=int, default=80)
-    p.add_argument("--n_steps",   type=int, default=80)
+    p.add_argument("--n_steps",   type=int, default=200)
     return p.parse_args()
 
 
@@ -90,10 +90,10 @@ def _cleaning_config():
 
 def _armpose_config():
     base_kps = {
-        "shoulder": np.array([0.25, 0.00, 0.75]),
-        "elbow":    np.array([0.40, 0.00, 0.85]),
-        "wrist":    np.array([0.55, 0.00, 0.80]),
-        "hand":     np.array([0.60, 0.00, 0.70]),
+        "shoulder": np.array([0.35, 0.00, 0.70]),
+        "elbow":    np.array([0.47, 0.00, 0.80]),
+        "wrist":    np.array([0.57, 0.00, 0.75]),
+        "hand":     np.array([0.62, 0.00, 0.65]),
     }
     rng = np.random.default_rng(44)
     delta = rng.uniform(-0.04, 0.04, 3) * [1,0,1]
@@ -174,12 +174,19 @@ def main():
             rows.append(row)
         combined.append(np.vstack(rows))
 
-    # Save (every 3rd frame for GIF, budget 15MB)
+    # Save (dynamic subsampling to stay under 15MB budget)
     gif_path = out_dir / "highlight_reel.gif"
     mp4_path = out_dir / "highlight_reel.mp4"
 
-    step = 3
-    sub  = combined[::step]
+    step = 1
+    while True:
+        sub = combined[::step]
+        est = len(sub) * combined[0].nbytes // 10
+        if est <= 15 * 1024 * 1024 or step >= 8:
+            break
+        step += 1
+    if step > 1:
+        print(f"  GIF subsampled every {step} frames ({len(sub)} frames)")
     imageio.mimwrite(str(gif_path), sub, fps=args.fps, loop=0)
     sz = gif_path.stat().st_size
     print(f"\n{gif_path.name}: {sz/1024/1024:.1f} MB")

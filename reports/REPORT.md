@@ -117,36 +117,54 @@ Main Sec. V-C claim confirmed: MultiSourceGPT Fréchet < SingleSourceGPT (ratio 
 
 ---
 
-## 3D Simulation Results (Sec. VI analogs)
+## 3D Simulation Results (Sec. VI analogs — Phase 13/14/15 Franka Panda)
 
-**Reshelving (Sec. VI-A analog):** Kinematic end-effector moves from a source
-shelf pose to a randomly offset target pose via GPT-transported trajectory.
-Evaluated over 10 randomised scenes. Success rate (final pos error < threshold)
-confirmed above 50% in Phase 9 smoke tests. The OOD fallback to linear transport
-is visible at large scene perturbations (> 0.3 m): ψ contribution shrinks as
-inputs leave the training cloud and the pure-γ linear alignment dominates.
+**Reshelving (Sec. VI-A analog):** Franka Panda arm performs pick-and-place via
+GPT-transported GP dynamical system (35 demo steps, 200 rollout steps, 80 GP
+training iterations). Evaluated over 4 randomised scenes (seed 0).
 
-**Arm-pose following (Sec. VI-B analog):** Random 3D joint targets transported
-to a perturbed reference frame using GPT. Evaluated over 10 scenes. Confirms
-that orientation transport (Eq. 15) with QR re-orthogonalisation maintains SO(3)
-structure (det ≈ +1, atol=1e-6 in all 10 scenes).
+| Metric | Value |
+|--------|-------|
+| Success rate (8 cm threshold) | 0/4 (0%) |
+| Mean final EE error | 0.326 m |
+| IK fail rate | 0.0% |
 
-**Surface cleaning (Sec. VI-C analog, Figs. 15/16):** Five surface variants
-(flat, tilted, curved, bumpy, tilted+curved) evaluated with SVGP transport
-(n_inducing=100, 400-point clouds). Coverage fractions at 150-step rollout:
+The box follows the EE visually (kinematic attachment) during the carry phase.
+The 8 cm threshold is honest: GP rollouts without feedback control cannot achieve
+sub-cm precision (see Limitations). Errors of 0.24–0.43 m indicate the rollout
+moves in the correct direction but does not converge to the transported goal within
+200 steps. This is consistent with the GP DS zero-mean prior: velocity decays to
+zero as the rollout leaves the training cloud rather than being driven to a goal.
 
-| Surface       | Coverage | Notes |
-|--------------|----------|-------|
-| flat (demo)  | ~0.20    | Kinematic rollout, no path-following controller |
-| tilted       | ~0.20    | Tilted normal transported correctly |
-| curved       | ~0.20    | Sinusoidal surface, z-displacement preserved |
-| bumpy        | ~0.20    | Gaussian bumps, smoother rollout |
-| tilted+curved| ~0.20    | Combined surface |
+**Arm-pose following (Sec. VI-B analog):** EE traces shoulder→elbow→wrist→hand
+keypoints on a mannequin arm (30 demo steps, 200 rollout steps). Evaluated over
+4 randomised scenes (seed 0).
 
-Coverage is modest (~20%) because the kinematic rollout uses a greedy DS velocity
-command without coverage-aware path planning. The transported trajectories do
-follow the surface geometrically — mean surface distance < 0.03 m in all cases.
-Force profile trends (Hooke's law proxy ‖Ks·ẋ‖) are preserved qualitatively.
+| Metric | Value |
+|--------|-------|
+| Success rate (10 cm threshold) | 0/4 (0%) |
+| Mean final EE error | 0.239 m |
+| IK fail rate | 0.0% |
+
+Keypoints were moved to the interior of the workspace ([0.35–0.62, 0, 0.65–0.80])
+to eliminate IK failures that occurred with the original boundary positions
+([0.25, 0, 0.75] shoulder). All waypoints achieve IK OK.
+
+**Surface cleaning (Sec. VI-C analog, Figs. 15/16 Phase 10):** Four surface
+variants evaluated over 200 rollout steps, raster-scan boustrophedon demo (215
+steps). Camera switches from front (first 40% = approach + initial strokes) to
+overhead top view (last 60% = coverage view).
+
+| Scene | Final EE Error | IK fail |
+|-------|----------------|---------|
+| 1 | 0.322 m | 0% |
+| 2 | 0.269 m | 0% |
+| 3 | 0.354 m | 0% |
+| 4 | 0.308 m | 0% |
+
+Mean error 0.313 m. EE actively sweeps in the transported surface region
+(velocity rescaling fix: ratio ≈ 3–8×). Force color-coding by EE speed
+(Hooke's law proxy) visible in animation.
 
 ---
 
@@ -182,6 +200,22 @@ Force profile trends (Hooke's law proxy ‖Ks·ẋ‖) are preserved qualitative
 - **Nearest-neighbour cloud pairing (Phase 10)** is a simple approximation to the
   optimal transport pairing used in the paper. For highly non-uniform clouds,
   NN pairing can produce asymmetric correspondences that degrade ψ training.
+
+- **GP DS rollouts require far more steps than waypoint controllers.** With a
+  zero-mean prior, the predicted velocity decays to zero outside the training
+  cloud rather than being driven toward the goal. 200 Euler steps with a 5 Hz
+  control rate equals 10 s of simulated time, yet the EE does not converge within
+  the workspace for 30–35-point demos. A feedback controller (e.g., ILoSA impedance)
+  is required for reliable goal-reaching — absent in this kinematic reproduction.
+
+- **No feedback control: IK errors accumulate mid-rollout.** Each step computes
+  IK independently from the current joint state. There is no correction loop; drift
+  compounds over long rollouts and can push the EE toward workspace boundaries.
+
+- **Object grasping is visual-only (no gripper physics).** The orange box position
+  is updated by overwriting `model.geom_pos` to follow the EE. No contact forces,
+  no gripper actuation, and no object-drop logic are implemented. The visual effect
+  is a teleporting box — physically meaningless but sufficient for animation review.
 
 ---
 

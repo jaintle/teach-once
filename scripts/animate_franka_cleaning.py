@@ -25,7 +25,7 @@ from gpt_repro.transport.franka_rollout import (
     record_franka_demo,
     transport_and_rollout_franka,
 )
-from gpt_repro.viz.frame_annotate import add_text_overlay, colormap_scalar
+from gpt_repro.viz.frame_annotate import add_text_overlay, colormap_scalar, add_progress_bar
 
 
 def parse_args():
@@ -37,7 +37,7 @@ def parse_args():
     p.add_argument("--height",    type=int, default=480)
     p.add_argument("--out_dir",   default="reports/figures/")
     p.add_argument("--gp_n_iter", type=int, default=80)
-    p.add_argument("--n_steps",   type=int, default=80)
+    p.add_argument("--n_steps",   type=int, default=200)
     return p.parse_args()
 
 
@@ -82,7 +82,7 @@ def _save_gif_mp4(frames, out_dir, stem, fps, budget_bytes):
     gif_path = out_dir / f"{stem}.gif"
     mp4_path = out_dir / f"{stem}.mp4"
     step = 1
-    while len(frames[::step]) * frames[0].nbytes // 10 > budget_bytes and step < 4:
+    while len(frames[::step]) * frames[0].nbytes // 10 > budget_bytes and step < 8:
         step += 1
     sub = frames[::step]
     imageio.mimwrite(str(gif_path), sub, fps=fps, loop=0)
@@ -151,9 +151,11 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
 
     # Re-render with smoothed joints + camera switch + force colour
     frames = []
-    half   = len(q_smooth) // 2
+    # Front camera: first 40% (approach + initial strokes visible)
+    # Top camera: remaining 60% (overhead coverage view)
+    switch_fi = int(len(q_smooth) * 0.40)
     for fi, q in enumerate(q_smooth):
-        cam = "front" if fi < half else "top"
+        cam = "front" if fi < switch_fi else "top"
         env.set_camera(cam)
         env.set_qpos(q)
 
@@ -174,6 +176,8 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
                 f"S{scene_idx+1} {cam} | spd:{force_val:.3f}",
                 pos=(8, 24), font_scale=0.50,
             )
+            progress = fi / max(1, len(q_smooth) - 1)
+            frame = add_progress_bar(frame, progress, success=None)
             frames.append(frame)
 
     final_err = float(np.linalg.norm(rollout_x[-1] - x_t[-1]))
@@ -181,7 +185,8 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
         "frames": frames,
         "final_error": final_err,
         "ik_fail_rate": ik_fails / max(1, n_steps),
-        "success": final_err < 0.15,
+        # 8cm threshold: GP rollouts cannot achieve sub-cm precision without feedback
+        "success": final_err < 0.08,
     }
 
 

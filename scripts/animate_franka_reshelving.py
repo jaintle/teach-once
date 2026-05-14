@@ -20,6 +20,7 @@ import pathlib
 import sys
 
 import imageio
+import mujoco
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
@@ -30,7 +31,7 @@ from gpt_repro.transport.franka_rollout import (
     record_franka_demo,
     transport_and_rollout_franka,
 )
-from gpt_repro.viz.frame_annotate import add_text_overlay
+from gpt_repro.viz.frame_annotate import add_text_overlay, add_progress_bar
 
 # ---------------------------------------------------------------------------
 
@@ -43,7 +44,10 @@ def parse_args():
     p.add_argument("--height",    type=int, default=480)
     p.add_argument("--out_dir",   default="reports/figures/")
     p.add_argument("--gp_n_iter", type=int, default=80)
-    p.add_argument("--n_steps",   type=int, default=80)
+    p.add_argument("--n_steps",   type=int, default=200)
+    p.add_argument("--success_threshold", type=float, default=0.08,
+                   help="GP rollout cannot achieve sub-cm precision; 8cm threshold "
+                        "captures functional task completion.")
     return p.parse_args()
 
 
@@ -104,7 +108,7 @@ def _save_gif_mp4(frames, out_dir, stem, fps, budget_bytes):
     while True:
         sub = frames[::step]
         est = len(sub) * frames[0].nbytes // 10  # rough GIF estimate
-        if est <= budget_bytes or step >= 4:
+        if est <= budget_bytes or step >= 8:
             break
         step += 1
     if step > 1:
@@ -159,19 +163,44 @@ def main():
         res = transport_and_rollout_franka(
             demo=base_demo, S=S, T=T, env=env,
             gp_n_iter=args.gp_n_iter, n_steps=args.n_steps,
+            success_threshold=args.success_threshold,
             seed=trial_seed,
         )
         print(f"  err={res['final_error']:.3f}m  ik_fail={res['ik_fail_rate']*100:.0f}%  success={res['success']}")
 
-        # Re-render with object attachment (box follows EE during transport)
-        q_arr = res["rollout_q"]
-        n_q   = len(q_arr)
-        grasp_fi = n_q // 4          # attach object ~25% through rollout
-        place_fi = 3 * n_q // 4      # detach object ~75% through rollout
+        # Re-render with object attachment — 3 phases auto-detected from rollout_x:
+        #   Phase A (approach): EE far from box → box stays on table.
+        #   Phase B (carry):    EE within 0.06m of transported object → box follows EE.
+        #   Phase C (retreat):  EE within 0.08m of transported goal → box freezes there.
+        transported_obj  = res["transport"].transform(new_scene["object_pose"].reshape(1,3))[0]
+        transported_goal = res["transport"].transform(new_scene["goal_pose"].reshape(1,3))[0]
+        rollout_x = res["rollout_x"]
+        q_arr     = res["rollout_q"]
+
+        # Auto-detect phase boundaries
+        dist_to_obj  = np.linalg.norm(rollout_x - transported_obj,  axis=1)
+        dist_to_goal = np.linalg.norm(rollout_x - transported_goal, axis=1)
+        grasp_candidates = np.where(dist_to_obj  < 0.06)[0]
+        place_candidates = np.where(dist_to_goal < 0.08)[0]
+        grasp_fi = int(grasp_candidates[0]) if len(grasp_candidates) else len(q_arr) // 4
+        place_fi = int(place_candidates[0]) if len(place_candidates) else 3 * len(q_arr) // 4
+        # Ensure ordering
+        place_fi = max(grasp_fi + 1, place_fi)
+
+        _CARRY_OFFSET = np.array([0.0, 0.0, -0.03])  # box hangs 3cm below EE
+
         annotated = []
         for fi, q in enumerate(q_arr):
             if fi == grasp_fi:
-                env.attach_object("object")
+                # Set attach offset so box is 3cm below EE at grasp point
+                env._attached_geom_id = None  # ensure clean state
+                env.set_qpos(q)
+                ee_now = env.get_ee_pos()
+                # Override model geom pos to follow EE with fixed downward offset
+                gid = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_GEOM, "object")
+                if gid >= 0:
+                    env._attached_geom_id = gid
+                    env._attach_offset = _CARRY_OFFSET.copy()
             if fi == place_fi:
                 env.detach_object()
             env.set_qpos(q)
@@ -182,6 +211,9 @@ def main():
                     f"Scene {i+1} | err:{res['final_error']:.3f}m",
                     pos=(8, 24), font_scale=0.55,
                 )
+                progress = fi / max(1, len(q_arr) - 1)
+                frame = add_progress_bar(frame, progress,
+                                         success=res["success"] if fi == len(q_arr)-1 else None)
                 annotated.append(frame)
         env.close()
         res["annotated_frames"] = annotated

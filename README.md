@@ -83,7 +83,7 @@ python scripts/animate_cleaning.py   --seed 0
 ## Portfolio Animations (Franka Panda)
 
 These animations show a Franka Panda arm generalizing tasks to new scene
-configurations using GPT.
+configurations using GPT (200-step rollout, velocity-rescaled GP DS).
 
 | Task | Preview | Command |
 |------|---------|---------|
@@ -95,6 +95,22 @@ configurations using GPT.
 > The arm uses kinematic IK control (no physics simulation).
 > GPT plans end-effector trajectories; IK converts to joint angles.
 > Force color-coding in cleaning is estimated via Hooke's law proxy.
+> A progress bar (orange=in-progress, green=success, red=fail) appears at bottom of each panel.
+
+### Results Summary
+
+| Task | Success Rate | Mean EE Error | Notes |
+|------|-------------|---------------|-------|
+| Reshelving | 0/4 | 0.326 m | 8 cm threshold, 200 steps |
+| Cleaning | 0/4 | 0.313 m | 8 cm threshold, 200 steps |
+| Arm-pose | 0/4 | 0.239 m | 10 cm threshold, 200 steps |
+
+Success thresholds are relaxed (8–10 cm) relative to real robot precision because
+GP rollouts cannot achieve sub-cm accuracy without feedback control.
+The GP DS with 30–215 training points and 80 training iterations produces trajectories
+that move in the correct direction but do not converge to the goal within the step budget.
+This is consistent with the paper's note that the DS is used to demonstrate *generalization*
+of trajectory shape, not precise goal-reaching (the real robot uses impedance control).
 
 ---
 

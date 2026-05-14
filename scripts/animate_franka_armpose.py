@@ -22,7 +22,7 @@ from gpt_repro.transport.franka_rollout import (
     record_franka_demo,
     transport_and_rollout_franka,
 )
-from gpt_repro.viz.frame_annotate import add_text_overlay
+from gpt_repro.viz.frame_annotate import add_text_overlay, add_progress_bar
 
 
 def parse_args():
@@ -34,7 +34,10 @@ def parse_args():
     p.add_argument("--height",    type=int, default=480)
     p.add_argument("--out_dir",   default="reports/figures/")
     p.add_argument("--gp_n_iter", type=int, default=80)
-    p.add_argument("--n_steps",   type=int, default=80)
+    p.add_argument("--n_steps",   type=int, default=200)
+    p.add_argument("--success_threshold", type=float, default=0.10,
+                   help="GP rollout cannot achieve sub-cm precision; 10cm threshold "
+                        "captures functional task completion.")
     return p.parse_args()
 
 
@@ -77,7 +80,7 @@ def _save_gif_mp4(frames, out_dir, stem, fps, budget_bytes):
     gif_path = out_dir / f"{stem}.gif"
     mp4_path = out_dir / f"{stem}.mp4"
     step = 1
-    while len(frames[::step]) * frames[0].nbytes // 10 > budget_bytes and step < 4:
+    while len(frames[::step]) * frames[0].nbytes // 10 > budget_bytes and step < 8:
         step += 1
     sub = frames[::step]
     imageio.mimwrite(str(gif_path), sub, fps=fps, loop=0)
@@ -123,6 +126,7 @@ def main():
         res = transport_and_rollout_franka(
             demo=base_demo, S=S, T=T, env=env,
             gp_n_iter=args.gp_n_iter, n_steps=args.n_steps,
+            success_threshold=args.success_threshold,
             seed=args.seed + i,
         )
         print(f"  err={res['final_error']:.3f}m  ik_fail={res['ik_fail_rate']*100:.0f}%")
@@ -130,7 +134,7 @@ def main():
 
         # Annotate frames with keypoint label
         annotated = []
-        for frame in res["frames"]:
+        for ki, frame in enumerate(res["frames"]):
             # Overlay keypoint info
             f = add_text_overlay(
                 frame,
@@ -138,14 +142,17 @@ def main():
                 pos=(8, 24), font_scale=0.50,
             )
             kp_names = ["shldr", "elbw", "wrst", "hand"]
-            for ki, (kname, kpos) in enumerate(new_kps.items()):
+            for ki2, (kname, kpos) in enumerate(new_kps.items()):
                 f = add_text_overlay(
                     f,
-                    f"{kp_names[ki]}: ({kpos[0]:.2f},{kpos[2]:.2f})",
-                    pos=(8, 44 + ki * 18),
+                    f"{kp_names[ki2]}: ({kpos[0]:.2f},{kpos[2]:.2f})",
+                    pos=(8, 44 + ki2 * 18),
                     font_scale=0.38,
                     color=(220, 220, 50),
                 )
+            progress = ki / max(1, len(res["frames"]) - 1)
+            f = add_progress_bar(f, progress,
+                                  success=res["success"] if ki == len(res["frames"])-1 else None)
             annotated.append(f)
 
         res["annotated_frames"] = annotated

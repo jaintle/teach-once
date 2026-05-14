@@ -129,9 +129,10 @@ def transport_and_rollout_franka(
     gp_cls: Type = ExactGPRegressor,
     n_interp: int = 5,
     dt: float = 0.05,
-    n_steps: int = 120,
+    n_steps: int = 200,
     gp_n_iter: int = 100,
     seed: int = 0,
+    success_threshold: float = 0.08,
 ) -> dict:
     """Transport a Franka demo to a new scene and roll it out with GPT.
 
@@ -158,6 +159,9 @@ def transport_and_rollout_franka(
     n_steps : int — rollout steps.
     gp_n_iter : int — GP training iterations.
     seed : int — random seed.
+    success_threshold : float — distance to transported goal for success (m).
+        Default 0.08 m. GP rollouts cannot achieve sub-cm precision without
+        feedback control; 8cm captures functional task completion.
 
     Returns
     -------
@@ -248,7 +252,7 @@ def transport_and_rollout_franka(
     final_pos  = rollout_x[-1]
     goal_pos   = x_t[-1]
     final_error = float(np.linalg.norm(final_pos - goal_pos))
-    success = final_error < 0.1
+    success = final_error < success_threshold
     ik_fail_rate = ik_fails / max(1, n_steps)
 
     return {

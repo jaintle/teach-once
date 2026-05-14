@@ -1283,3 +1283,68 @@ GPT DS rollout with 30–35 demo points and gp_n_iter=80 does not converge to th
 - Increase gp_n_iter to 200+ and n_steps to 200 to improve DS convergence.
 - Joint smoothing sigma=1.5 is conservative; could use 2.0 for smoother animations.
 - Camera switching in cleaning (front→top) confirmed working but mid-rollout switch shows visible jump in camera angle.
+
+---
+
+## Phase 15 — Animation polish, rollout tuning, final report
+
+Date: 2026-05-14
+Paper section(s) implemented: N/A (tuning and polish; no new algorithms)
+
+### Files added / changed
+- `src/gpt_repro/transport/franka_rollout.py` — added `success_threshold` parameter (default 0.08 m); increased `n_steps` default to 200; added `success_threshold` to docstring.
+- `src/gpt_repro/viz/frame_annotate.py` — added `add_progress_bar(frame, progress, success, bar_height=6)` (orange=in-progress, green=success, red=fail).
+- `src/gpt_repro/envs/franka_env.py` — `attach_object` / `detach_object` / `_update_attached_object` methods for visual-only box attachment; `set_qpos` now calls `_update_attached_object`; attached_geom_id and attach_offset stored in `__init__`.
+- `src/gpt_repro/policies/franka_demos.py` — keypoints moved to safe workspace interior: shoulder [0.35,0,0.70], elbow [0.47,0,0.80], wrist [0.57,0,0.75], hand [0.62,0,0.65].
+- `src/gpt_repro/envs/franka_scene.py` — armpose sphere positions updated to match new keypoints.
+- `scripts/animate_franka_reshelving.py` — n_steps default 200; success_threshold arg (default 0.08); step cap raised to 8 for GIF subsampling; progress bar added; object attachment uses 3-phase auto-detection (proximity to transported object/goal) with -0.03m z offset.
+- `scripts/animate_franka_cleaning.py` — n_steps default 200; success threshold relaxed to 0.08m; camera switch changed to 40/60 split (front first 40%, top remaining 60%); velocity rescaling added; step cap raised to 8.
+- `scripts/animate_franka_armpose.py` — n_steps default 200; success_threshold arg (default 0.10); step cap raised to 8; progress bar added; armpose KPs updated to match new positions.
+- `scripts/animate_highlight_reel.py` — n_steps default 200; armpose KPs updated; dynamic GIF subsampling (step cap 8).
+- `reports/REPORT.md` — 3D Simulation Results section replaced with actual Phase 14/15 results; three Limitations paragraphs added (GP DS rollout convergence, no feedback control, visual-only grasping).
+- `README.md` — Portfolio Animations section updated with progress bar note; Results Summary table added with actual numbers.
+- `reports/results/smoke_all_output.txt` — updated from new smoke_all.py run.
+
+### What works
+- `add_progress_bar`: orange bar fills across the bottom 6px; turns green/red on final frame.
+- 3-phase reshelving attachment: box detected via proximity threshold (0.06m to object, 0.08m to goal); detected grasp/place frames from `rollout_x`; box hangs 3cm below EE during carry phase.
+- Cleaning camera switch: front 0–40% of frames (arm approach + initial strokes), top 40–100% (surface coverage overhead view).
+- Armpose IK failures eliminated: workspace-safe keypoints confirm 0% IK fail across all 4 scenes.
+- Velocity rescaling active in all 3 tasks (2–50× rescale depending on GP attenuation).
+- GIF step cap 8 keeps all GIFs within budget even with 200-step rollouts.
+
+### Final results (seed=0, n_scenes=4, n_steps=200, gp_n_iter=80)
+
+| Task | Success Rate | Mean EE Error | IK Fail | GIF Size |
+|------|-------------|---------------|---------|----------|
+| Reshelving | 0/4 (0%) | 0.326 m | 0.0% | 3.6 MB |
+| Cleaning | 0/4 (0%) | 0.313 m | 0.0% | 3.5 MB |
+| Arm-pose | 0/4 (0%) | 0.239 m | 0.0% | 4.4 MB |
+| Highlight reel | — | — | — | 1.4 MB |
+
+Success thresholds: reshelving 8cm, armpose 10cm. Success rate is 0/4 for all tasks — reported honestly.
+
+### Why success rate remains 0/4
+The GP DS (zero-mean prior, 80 iterations, 30–215 training points) does not converge to the transported goal within 200 Euler steps. The rollout moves in the correct direction but decays to zero velocity before reaching the goal (zero-mean prior → velocity falls off outside training support). This is consistent with Phase 9 findings. Longer training (gp_n_iter ≥ 500) or more training data would improve convergence; ILoSA-style feedback control is required for reliable goal-reaching.
+
+### Whether relaxed thresholds are honest and justified
+Yes. 8cm and 10cm are documented in CLI help strings, code comments, README, and REPORT.md. They are not close to being satisfied (nearest final error 0.239m); they exist to define what would count as "functional task completion" rather than to inflate results.
+
+### Highlight reel size
+1.4 MB (under 15 MB budget ✓). Dynamic subsampling at step=5 (41 frames of stacked 720×480×3 panels).
+
+### Remaining visual artifacts
+- Box "teleports" to EE during carry phase — no smooth grasp animation; visual attachment only.
+- Camera switch in cleaning causes one-frame jump in view; acceptable for animation purposes.
+- 46× velocity rescale in armpose scene 2 (very low GP pred norm) produces overshoot oscillation before decaying.
+
+### Final test result
+105 passed, 3 warnings (pytest)
+
+### Final smoke_all result
+10/10 smoke tests passed (Phases 1–10 only; Phases 11–15 have no standalone smoke scripts)
+
+### Open questions / deferred work
+- Increasing gp_n_iter to 500+ or n_steps to 500 would help DS convergence; not done to keep runtime manageable.
+- A feedback controller (ILoSA / admittance control) is the correct fix for goal-reaching; out of scope per CLAUDE.md.
+- Gripper physics (actual grasp simulation) is not implemented; visual-only attachment confirmed sufficient for animation review.

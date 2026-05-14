@@ -3,48 +3,48 @@ smoke_all.py — Gaussian Process Transportation reproduction
 ============================================================
 
 [Phase 1] scripts/smoke_phase1.py ...
-  → PASS  (4.0s)
+  → PASS  (3.5s)
 
 [Phase 2] scripts/smoke_phase2.py ...
-  → PASS  (2.9s)
+  → PASS  (2.8s)
 
 [Phase 3] scripts/smoke_phase3.py ...
-  → PASS  (1.9s)
-
-[Phase 4] scripts/smoke_phase4.py ...
-  → PASS  (4.5s)
-
-[Phase 5] scripts/smoke_phase5.py ...
   → PASS  (3.4s)
 
+[Phase 4] scripts/smoke_phase4.py ...
+  → PASS  (4.7s)
+
+[Phase 5] scripts/smoke_phase5.py ...
+  → PASS  (3.0s)
+
 [Phase 6] scripts/smoke_phase6.py ...
-  → PASS  (5.6s)
+  → PASS  (8.0s)
 
 [Phase 7] scripts/smoke_phase7.py ...
-  → PASS  (11.4s)
+  → PASS  (10.8s)
 
 [Phase 8] scripts/smoke_phase8.py ...
-  → PASS  (5.1s)
+  → PASS  (5.0s)
 
 [Phase 9] scripts/smoke_phase9.py ...
-  → PASS  (2.0s)
+  → PASS  (1.8s)
 
 [Phase 10] scripts/smoke_phase10.py ...
-  → PASS  (3.2s)
+  → PASS  (3.0s)
 
 ============================================================
 SUMMARY: 10/10 smoke tests passed
 ============================================================
 
-  ✅ PASS  Phase 1      (4.0s)
-  ✅ PASS  Phase 2      (2.9s)
-  ✅ PASS  Phase 3      (1.9s)
-  ✅ PASS  Phase 4      (4.5s)
-  ✅ PASS  Phase 5      (3.4s)
-  ✅ PASS  Phase 6      (5.6s)
-  ✅ PASS  Phase 7      (11.4s)
-  ✅ PASS  Phase 8      (5.1s)
-  ✅ PASS  Phase 9      (2.0s)
-  ✅ PASS  Phase 10     (3.2s)
+  ✅ PASS  Phase 1      (3.5s)
+  ✅ PASS  Phase 2      (2.8s)
+  ✅ PASS  Phase 3      (3.4s)
+  ✅ PASS  Phase 4      (4.7s)
+  ✅ PASS  Phase 5      (3.0s)
+  ✅ PASS  Phase 6      (8.0s)
+  ✅ PASS  Phase 7      (10.8s)
+  ✅ PASS  Phase 8      (5.0s)
+  ✅ PASS  Phase 9      (1.8s)
+  ✅ PASS  Phase 10     (3.0s)
 
 Final: 10/10 smoke tests passed

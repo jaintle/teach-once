@@ -8,7 +8,7 @@ All functions gracefully degrade:
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -184,3 +184,50 @@ def colormap_scalar(
     # Fallback: linear blue→red
     t = max(0.0, min(1.0, (value - vmin) / max(vmax - vmin, 1e-9)))
     return (int(t * 255), 0, int((1 - t) * 255))
+
+
+# ---------------------------------------------------------------------------
+# add_progress_bar
+# ---------------------------------------------------------------------------
+
+def add_progress_bar(
+    frame: np.ndarray,
+    progress: float,
+    success: Optional[bool] = None,
+    bar_height: int = 6,
+) -> np.ndarray:
+    """Draw a horizontal progress bar along the bottom of ``frame``.
+
+    The bar fills left-to-right as ``progress`` goes from 0 to 1.
+    It does not overlap existing text overlays (placed at bottom edge).
+
+    Parameters
+    ----------
+    frame      : (H, W, 3) uint8 numpy array.
+    progress   : float in [0, 1].
+    success    : None → orange (in-progress), True → green, False → red.
+    bar_height : pixels (default 6).
+
+    Returns
+    -------
+    (H, W, 3) uint8 array with bar painted onto the last ``bar_height``
+    rows (copies frame first).
+    """
+    out = frame.copy()
+    H, W = out.shape[:2]
+    p = float(np.clip(progress, 0.0, 1.0))
+    fill_w = int(round(p * W))
+
+    if success is None:
+        fill_color = (255, 165, 0)    # orange — in-progress
+    elif success:
+        fill_color = (50, 220, 50)    # green — done
+    else:
+        fill_color = (220, 50, 50)    # red — failed
+
+    # Paint the last bar_height rows; fill left portion, dark-grey remainder
+    row_start = max(0, H - bar_height)
+    out[row_start:H, :, :] = (40, 40, 40)          # background
+    if fill_w > 0:
+        out[row_start:H, :fill_w, :] = fill_color  # filled portion
+    return out
