@@ -124,6 +124,10 @@ class FrankaKinematicEnv(gymnasium.Env):
         # Renderer (lazy-created on first render call)
         self._renderer: Optional[mujoco.Renderer] = None
 
+        # Object attachment state (purely visual, no physics)
+        self._attached_geom_id: Optional[int] = None
+        self._attach_offset: Optional[np.ndarray] = None
+
         # Active camera params: (lookat, distance, elevation, azimuth)
         self._cam_lookat, self._cam_distance, self._cam_elevation, self._cam_azimuth = (
             CAMERAS["front"]
@@ -195,6 +199,7 @@ class FrankaKinematicEnv(gymnasium.Env):
         """Directly set arm joint positions (7,) and run forward kinematics."""
         self._data.qpos[:7] = np.asarray(q, dtype=np.float64).ravel()[:7]
         mujoco.mj_forward(self._model, self._data)
+        self._update_attached_object()
 
     def set_ee_pos(self, target_pos: np.ndarray) -> bool:
         """Solve IK and set joints to reach target_pos.  Return IK success."""
@@ -209,6 +214,39 @@ class FrankaKinematicEnv(gymnasium.Env):
     def get_ee_pos(self) -> np.ndarray:
         """Return current EE position (3,)."""
         return self._data.site_xpos[self._site_id].copy()
+
+    # ------------------------------------------------------------------
+    # Object attachment (visual only)
+    # ------------------------------------------------------------------
+
+    def attach_object(self, object_name: str) -> None:
+        """Attach a geom to follow the EE (purely visual, no physics).
+
+        Stores the geom id and the offset from EE at attachment time.
+        Subsequent calls to set_qpos will move the geom with the EE.
+        """
+        geom_id = mujoco.mj_name2id(
+            self._model, mujoco.mjtObj.mjOBJ_GEOM, object_name
+        )
+        if geom_id < 0:
+            raise ValueError(f"Geom {object_name!r} not found in model.")
+        self._attached_geom_id = geom_id
+        ee_pos = self._data.site_xpos[self._site_id].copy()
+        # geom_pos is the position in the parent body frame; for worldbody geoms
+        # this equals world-frame position before mj_forward updates.
+        obj_pos = self._model.geom_pos[geom_id].copy()
+        self._attach_offset = obj_pos - ee_pos
+
+    def detach_object(self) -> None:
+        """Stop following EE with the attached geom."""
+        self._attached_geom_id = None
+        self._attach_offset = None
+
+    def _update_attached_object(self) -> None:
+        """Move attached geom to EE + stored offset (called after mj_forward)."""
+        if self._attached_geom_id is not None and self._attach_offset is not None:
+            ee_pos = self._data.site_xpos[self._site_id].copy()
+            self._model.geom_pos[self._attached_geom_id] = ee_pos + self._attach_offset
 
     def get_joint_limits(self) -> Tuple[np.ndarray, np.ndarray]:
         """Return (q_lower, q_upper) for 7 arm joints."""

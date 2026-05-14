@@ -118,13 +118,13 @@ def _armpose_spheres_xml() -> str:
     """Four coloured keypoint spheres for arm-pose task."""
     return (
         '    <geom name="kp_shoulder" type="sphere" size="0.030"\n'
-        '          pos="0.25 0.0 0.75" rgba="0.0 0.9 0.9 0.9"/>\n'
+        '          pos="0.35 0.0 0.70" rgba="0.0 0.9 0.9 0.9"/>\n'
         '    <geom name="kp_elbow"    type="sphere" size="0.022"\n'
-        '          pos="0.40 0.0 0.85" rgba="0.9 0.0 0.9 0.9"/>\n'
+        '          pos="0.47 0.0 0.80" rgba="0.9 0.0 0.9 0.9"/>\n'
         '    <geom name="kp_wrist"    type="sphere" size="0.018"\n'
-        '          pos="0.55 0.0 0.80" rgba="1.0 0.9 0.0 0.9"/>\n'
+        '          pos="0.57 0.0 0.75" rgba="1.0 0.9 0.0 0.9"/>\n'
         '    <geom name="kp_hand"     type="sphere" size="0.015"\n'
-        '          pos="0.60 0.0 0.70" rgba="0.2 0.4 0.9 0.9"/>\n'
+        '          pos="0.62 0.0 0.65" rgba="0.2 0.4 0.9 0.9"/>\n'
     )
 
 

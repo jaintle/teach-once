@@ -142,10 +142,10 @@ def get_armpose_waypoints(
     5. Move to hand.
     6. Retreat upward (+0.10 m from hand).
     """
-    shoulder = np.asarray(scene.get("shoulder", [0.25, 0.00, 0.75]), dtype=float)
-    elbow    = np.asarray(scene.get("elbow",    [0.40, 0.00, 0.85]), dtype=float)
-    wrist    = np.asarray(scene.get("wrist",    [0.55, 0.00, 0.80]), dtype=float)
-    hand     = np.asarray(scene.get("hand",     [0.60, 0.00, 0.70]), dtype=float)
+    shoulder = np.asarray(scene.get("shoulder", [0.35, 0.00, 0.70]), dtype=float)
+    elbow    = np.asarray(scene.get("elbow",    [0.47, 0.00, 0.80]), dtype=float)
+    wrist    = np.asarray(scene.get("wrist",    [0.57, 0.00, 0.75]), dtype=float)
+    hand     = np.asarray(scene.get("hand",     [0.62, 0.00, 0.65]), dtype=float)
 
     approach  = shoulder + np.array([0.0, 0.0, 0.10])
     retreat   = hand     + np.array([0.0, 0.0, 0.10])

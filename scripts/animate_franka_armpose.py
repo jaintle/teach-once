@@ -39,10 +39,10 @@ def parse_args():
 
 
 _BASE_KPS = {
-    "shoulder": np.array([0.25, 0.00, 0.75]),
-    "elbow":    np.array([0.40, 0.00, 0.85]),
-    "wrist":    np.array([0.55, 0.00, 0.80]),
-    "hand":     np.array([0.60, 0.00, 0.70]),
+    "shoulder": np.array([0.35, 0.00, 0.70]),
+    "elbow":    np.array([0.47, 0.00, 0.80]),
+    "wrist":    np.array([0.57, 0.00, 0.75]),
+    "hand":     np.array([0.62, 0.00, 0.65]),
 }
 
 

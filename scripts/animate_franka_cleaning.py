@@ -114,6 +114,15 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
     ds = GPDynamicalSystem(gp_cls=ExactGPRegressor, n_iter_default=args.gp_n_iter)
     ds.fit(x_t, xd_t)
 
+    # Velocity rescaling: compensate for GP attenuation
+    _pred_v, _ = ds.predict(x_t, return_std=True)
+    demo_v_norm = float(np.linalg.norm(xd_t, axis=1).mean()) + 1e-8
+    pred_v_norm = float(np.linalg.norm(_pred_v, axis=1).mean()) + 1e-8
+    if pred_v_norm < demo_v_norm * 0.9:
+        velocity_scale = float(np.clip(demo_v_norm / pred_v_norm, 1.0, 50.0))
+    else:
+        velocity_scale = 1.0
+
     ws_lo, ws_hi = env.get_workspace_bounds()
     env.reset()
     env.set_ee_pos(np.clip(x_t[0], ws_lo, ws_hi))
@@ -128,7 +137,7 @@ def _rollout_with_camera_switch_and_force(env, demo, S, T, args, scene_idx):
         vel = ds.predict(obs[np.newaxis], return_std=False)
         if vel.ndim == 2:
             vel = vel[0]
-        x_next = np.clip(obs + vel * 0.05, ws_lo, ws_hi)
+        x_next = np.clip(obs + (vel * velocity_scale) * 0.05, ws_lo, ws_hi)
         _, _, _, _, info = env.step(x_next)
         if not info["ik_success"]:
             ik_fails += 1

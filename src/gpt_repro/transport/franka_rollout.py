@@ -102,10 +102,10 @@ def record_franka_demo(
     q_arr = np.array(qs, dtype=np.float64)        # (N, 7)
     ok_arr = np.array(ik_successes, dtype=bool)   # (N,)
 
-    # Finite-difference velocities (pad last with second-to-last)
+    # Finite-difference velocities in m/s (divide displacement by control_dt)
     if len(x_arr) > 1:
         dx = np.diff(x_arr, axis=0)
-        xdot = np.vstack([dx, dx[-1:]])           # (N, 3)
+        xdot = np.vstack([dx, dx[-1:]]) / env.control_dt  # (N, 3) velocity m/s
     else:
         xdot = np.zeros_like(x_arr)
 
@@ -185,6 +185,16 @@ def transport_and_rollout_franka(
     ds = GPDynamicalSystem(gp_cls=gp_cls, n_iter_default=gp_n_iter)
     ds.fit(x_t, xd_t)
 
+    # Velocity rescaling: compensate for GP attenuation at low iteration counts
+    _pred_v, _ = ds.predict(x_t, return_std=True)
+    demo_v_norm = float(np.linalg.norm(xd_t, axis=1).mean()) + 1e-8
+    pred_v_norm = float(np.linalg.norm(_pred_v, axis=1).mean()) + 1e-8
+    if pred_v_norm < demo_v_norm * 0.9:
+        velocity_scale = float(np.clip(demo_v_norm / pred_v_norm, 1.0, 50.0))
+        print(f"  Rescaling velocities by {velocity_scale:.2f}x (pred={pred_v_norm:.4f} demo={demo_v_norm:.4f})")
+    else:
+        velocity_scale = 1.0
+
     # Workspace bounds for clamping
     ws_lo, ws_hi = env.get_workspace_bounds()
 
@@ -205,7 +215,7 @@ def transport_and_rollout_franka(
         if vel_cmd.ndim == 2:
             vel_cmd = vel_cmd[0]
 
-        x_next = obs + vel_cmd * dt
+        x_next = obs + (vel_cmd * velocity_scale) * dt
         # Clamp BEFORE IK (per spec)
         x_next = np.clip(x_next, ws_lo, ws_hi)
 

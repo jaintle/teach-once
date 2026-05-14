@@ -162,17 +162,28 @@ def main():
             seed=trial_seed,
         )
         print(f"  err={res['final_error']:.3f}m  ik_fail={res['ik_fail_rate']*100:.0f}%  success={res['success']}")
-        env.close()
 
-        # Annotate frames
+        # Re-render with object attachment (box follows EE during transport)
+        q_arr = res["rollout_q"]
+        n_q   = len(q_arr)
+        grasp_fi = n_q // 4          # attach object ~25% through rollout
+        place_fi = 3 * n_q // 4      # detach object ~75% through rollout
         annotated = []
-        for frame in res["frames"]:
-            f = add_text_overlay(
-                frame,
-                f"Scene {i+1} | err:{res['final_error']:.3f}m",
-                pos=(8, 24), font_scale=0.55,
-            )
-            annotated.append(f)
+        for fi, q in enumerate(q_arr):
+            if fi == grasp_fi:
+                env.attach_object("object")
+            if fi == place_fi:
+                env.detach_object()
+            env.set_qpos(q)
+            frame = env.render()
+            if frame is not None:
+                frame = add_text_overlay(
+                    frame,
+                    f"Scene {i+1} | err:{res['final_error']:.3f}m",
+                    pos=(8, 24), font_scale=0.55,
+                )
+                annotated.append(frame)
+        env.close()
         res["annotated_frames"] = annotated
         results.append(res)
 
