@@ -30,38 +30,80 @@ from gpt_repro.policies.surfaces_3d import SurfaceConfig, make_surface_pointclou
 
 def _build_cleaning_xml(
     surface_config: SurfaceConfig,
-    n_visual: int = 16,
+    n_visual: int = 150,
+    source_pts: "np.ndarray | None" = None,
+    target_pts: "np.ndarray | None" = None,
 ) -> str:
-    """Generate MuJoCo XML with a cleaning surface (visual only).
+    """Generate MuJoCo XML for surface cleaning.
 
-    Uses a flat base plane + a sparse grid of small spheres to indicate
-    the surface shape. The number of visual spheres is capped to keep
-    XML under 60 lines.
+    Phase 12: added source cloud (blue), target cloud (orange), coloured base
+    plane by surface kind, capsule EE, and a fixed camera.
+
+    Source/target clouds are subsampled to ``n_visual`` geoms each (cap=150).
     """
     c = surface_config.center
-    # Sample a few representative surface points for visual markers
-    vis_pts = make_surface_pointcloud(surface_config, n_points=n_visual, seed=0)
 
-    sphere_lines = []
-    for i, pt in enumerate(vis_pts):
-        sphere_lines.append(
-            f'    <geom name="surf_{i}" type="sphere" size="0.008" '
-            f'pos="{pt[0]:.3f} {pt[1]:.3f} {pt[2]:.3f}" '
-            f'rgba="0.8 0.5 0.2 0.5"/>'
+    # Floor colour by surface kind
+    floor_colours = {
+        "flat": "0.80 0.80 0.80 1",
+        "tilted": "0.75 0.82 0.90 1",
+        "curved": "0.72 0.88 0.74 1",
+        "bumpy": "0.90 0.88 0.70 1",
+    }
+    floor_rgba = floor_colours.get(surface_config.kind, "0.75 0.75 0.75 1")
+
+    # Target cloud (orange) from surface config
+    if target_pts is None:
+        target_pts = make_surface_pointcloud(surface_config, n_points=n_visual, seed=0)
+
+    # Subsample both clouds to cap
+    def _subsample(pts: np.ndarray, cap: int) -> np.ndarray:
+        if len(pts) > cap:
+            idx = np.round(np.linspace(0, len(pts) - 1, cap)).astype(int)
+            return pts[idx]
+        return pts
+
+    tgt = _subsample(target_pts, n_visual)
+
+    tgt_lines = []
+    for i, pt in enumerate(tgt):
+        tgt_lines.append(
+            f'    <geom name="tgt_{i}" type="sphere" size="0.004"'
+            f' pos="{pt[0]:.4f} {pt[1]:.4f} {pt[2]:.4f}"'
+            f' rgba="1.0 0.55 0.1 0.75" contype="0" conaffinity="0"/>'
         )
-    spheres_xml = "\n".join(sphere_lines)
+
+    src_lines = []
+    if source_pts is not None:
+        src = _subsample(source_pts, n_visual)
+        for i, pt in enumerate(src):
+            src_lines.append(
+                f'    <geom name="src_{i}" type="sphere" size="0.004"'
+                f' pos="{pt[0]:.4f} {pt[1]:.4f} {pt[2]:.4f}"'
+                f' rgba="0.25 0.55 0.95 0.65" contype="0" conaffinity="0"/>'
+            )
+
+    all_sphere_xml = "\n".join(src_lines + tgt_lines)
 
     return f"""<mujoco model="cleaning">
   <option gravity="0 0 0" timestep="0.02"/>
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <quality shadowsize="2048"/>
+  </visual>
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1"/>
-    <geom name="floor" type="plane" size="1 1 0.05" rgba="0.7 0.7 0.7 1" pos="{c[0]:.3f} {c[1]:.3f} 0"/>
-{spheres_xml}
+    <light pos="0 0 3" dir="0 0 -1" diffuse="1 1 1" specular="0.3 0.3 0.3"/>
+    <light pos="-1 -1 2" dir="1 1 -1" diffuse="0.5 0.5 0.5" specular="0 0 0"/>
+    <camera name="fixed" mode="fixed" pos="0.0 -0.5 0.8" zaxis="0.000 0.908 -0.419"/>
+    <geom name="floor" type="plane" size="1 1 0.05" rgba="{floor_rgba}" pos="{c[0]:.3f} {c[1]:.3f} 0"/>
+{all_sphere_xml}
     <body name="ee_body" pos="{c[0]:.3f} {c[1]:.3f} {c[2]:.3f}">
       <joint name="ee_x" type="slide" axis="1 0 0" range="-2 2"/>
       <joint name="ee_y" type="slide" axis="0 1 0" range="-2 2"/>
       <joint name="ee_z" type="slide" axis="0 0 1" range="-2 2"/>
-      <geom name="ee_geom" type="sphere" size="0.015" rgba="0.1 0.5 0.9 1"/>
+      <geom name="ee_geom" type="capsule" size="0.015 0.020"
+            fromto="0 0 -0.020 0 0 0.020" rgba="0.95 0.95 0.95 1"/>
     </body>
   </worldbody>
 </mujoco>"""
@@ -90,12 +132,19 @@ class SurfaceCleaningEnv(KinematicEndEffectorEnv):
         See ``KinematicEndEffectorEnv``.
     """
 
+    import numpy as _np
+    _CAM_LOOKAT    = _np.array([0.5, 0.0, 0.5])
+    _CAM_DISTANCE  = 1.0
+    _CAM_ELEVATION = 30.0
+    _CAM_AZIMUTH   = -90.0
+
     def __init__(
         self,
         surface_config: SurfaceConfig,
         dt: float = 0.02,
         n_surface_pts: int = 400,
         render_mode: Optional[str] = None,
+        source_config: Optional[SurfaceConfig] = None,
     ) -> None:
         self._surface_config = surface_config
         self._n_surface_pts = n_surface_pts
@@ -105,7 +154,17 @@ class SurfaceCleaningEnv(KinematicEndEffectorEnv):
             surface_config, n_points=n_surface_pts, seed=0
         )
 
-        xml = _build_cleaning_xml(surface_config, n_visual=16)
+        # Source cloud (optional) shown as blue dots in render
+        source_pts = None
+        if source_config is not None:
+            source_pts = make_surface_pointcloud(source_config, n_points=150, seed=0)
+
+        xml = _build_cleaning_xml(
+            surface_config,
+            n_visual=150,
+            source_pts=source_pts,
+            target_pts=self._surface_pts,
+        )
         super().__init__(xml_string=xml, dt=dt, render_mode=render_mode)
 
         # Reset EE to the first surface point

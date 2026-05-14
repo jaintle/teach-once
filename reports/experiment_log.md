@@ -1130,3 +1130,59 @@ Open questions / deferred work:
   long runtimes; existing files from Phase 10 are used.
 - smoke_all.py uses subprocess + .venv/bin/python path; on Windows the path
   separator would differ (.venv/Scripts/python.exe).
+
+---
+
+## Phase 12 — MuJoCo Visualisation & Animation
+
+Date: 2026-05-13
+Paper section(s) implemented: N/A (visual/demo layer; no new algorithms)
+
+### Files added / changed
+
+**New files:**
+- `src/gpt_repro/envs/assets.py` — shared XML fragment helpers (camera, lights, geoms)
+- `scripts/animate_reshelving.py` — 2×2 tiled GIF/MP4 of reshelving rollouts
+- `scripts/animate_armpose.py` — 2×2 tiled GIF/MP4 of arm-pose rollouts
+- `scripts/animate_cleaning.py` — 1×5 tiled GIF/MP4 with EE force colour-coding
+- `scripts/smoke_phase12.py` — smoke test (4/4 sections PASS)
+
+**Modified files:**
+- `src/gpt_repro/envs/base_env.py` — visual block, dual lights, fixed camera, capsule EE
+- `src/gpt_repro/envs/reshelving_env.py` — shelf planks, orange object box, green goal marker, `_rebuild_model`
+- `src/gpt_repro/envs/armpose_env.py` — coloured keypoint spheres, arm link capsules, `_rebuild_model`
+- `src/gpt_repro/envs/cleaning_env.py` — source/target point cloud spheres, `_rebuild_model`
+- `tests/test_envs.py` — 5 new Phase 12 tests (render shape, XML content, geom colour update)
+- `requirements.txt` — added `imageio-ffmpeg>=0.4.9`
+- `pyproject.toml` — added `[project.optional-dependencies] video` extra
+- `README.md` — added Animations section with table
+
+### What works
+- All 3 envs render 480×480 uint8 frames via fixed MuJoCo camera.
+- `camera lookat` → `camera zaxis` fix (MuJoCo 3.x doesn't support `lookat` attribute on `<camera>`).
+- Force colour-coding in cleaning animation: cool blue (low) → warm red (high) per rollout step.
+- 2×2 and 1×5 tiling with frame subsampling for GIF size management.
+- MP4 export wrapped in try/except so it degrades gracefully without imageio-ffmpeg.
+- smoke_phase12.py: 4/4 PASS in fast mode.
+
+### What was tricky
+- MuJoCo 3.x camera XML uses `zaxis` (not `lookat`) to point the camera; computed as normalised (target − pos).
+- `make_reshelving_demo` / `make_armpose_demo` return a `dict`, not an ndarray; scene `T` is `(8,3)` corner points, not a 4×4 matrix.
+- `SurfaceCleaningEnv` uses `get_ee_pos()` (inherited from `KinematicEndEffectorEnv`), not `._pos`.
+- GIF frame size can grow large with 1×5 tiling (2400×480 per frame); added [::2,::2] downscale guard.
+
+### Math / equation references
+None (Phase 12 is purely a visualisation layer).
+
+### Numerical sanity checks passed
+- test_render_returns_array: (480,480,3) uint8 from all 3 envs.
+- test_reshelving_xml_has_shelf_geom: "shelf" present.
+- test_armpose_xml_has_keypoint_spheres: "shoulder" and "elbow" present.
+- test_cleaning_xml_has_point_cloud: ≥50 sphere geoms in cleaning XML.
+- test_ee_color_update: RGBA write does not raise.
+- Total test count: 24 env+cleaning tests pass (was 19 before Phase 12).
+
+### Open questions / deferred work
+- MP4 generation requires `pip install imageio-ffmpeg`; documented in README.
+- Animations are kinematic only (point-mass EE, no articulated arm visuals).
+- GIF file sizes not validated in CI; manual check recommended after full-resolution runs.

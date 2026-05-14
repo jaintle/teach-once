@@ -25,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.1"]
+video = ["imageio-ffmpeg>=0.4.9"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

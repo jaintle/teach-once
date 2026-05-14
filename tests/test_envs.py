@@ -149,3 +149,80 @@ def test_evaluate_generalization_returns_rate():
     rate = result["success_rate"]
     assert 0.0 <= rate <= 1.0, f"success_rate {rate} not in [0,1]"
     assert len(result["all_rollouts"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 tests — render resolution, XML content, geom color update
+# ---------------------------------------------------------------------------
+
+def test_render_returns_array():
+    """All 3 envs return (480, 480, 3) uint8 from render() — Phase 12."""
+    set_global_seed(0)
+    from gpt_repro.envs.cleaning_env import SurfaceCleaningEnv
+    from gpt_repro.policies.surfaces_3d import SurfaceConfig
+
+    envs = [
+        ReshelvingEnv(render_mode="rgb_array"),
+        ArmPoseEnv(render_mode="rgb_array"),
+        SurfaceCleaningEnv(
+            SurfaceConfig(kind="flat", center=np.array([0.5, 0.0, 0.5])),
+            render_mode="rgb_array",
+        ),
+    ]
+    for env in envs:
+        env.reset(seed=0)
+        frame = env.render()
+        assert frame.shape == (480, 480, 3), (
+            f"{type(env).__name__}: expected (480,480,3), got {frame.shape}"
+        )
+        assert frame.dtype == np.uint8, f"{type(env).__name__}: expected uint8"
+        env.close()
+
+
+def test_reshelving_xml_has_shelf_geom():
+    """ReshelvingEnv XML must contain 'shelf' geometry — Phase 12."""
+    env = ReshelvingEnv()
+    assert "shelf" in env._xml_string, "Expected 'shelf' geom in reshelving XML"
+    env.close()
+
+
+def test_armpose_xml_has_keypoint_spheres():
+    """ArmPoseEnv XML must contain 'shoulder' and 'elbow' — Phase 12."""
+    env = ArmPoseEnv()
+    assert "shoulder" in env._xml_string, "Expected 'shoulder' in armpose XML"
+    assert "elbow" in env._xml_string, "Expected 'elbow' in armpose XML"
+    env.close()
+
+
+def test_cleaning_xml_has_point_cloud():
+    """SurfaceCleaningEnv XML must have >= 50 sphere geoms — Phase 12."""
+    from gpt_repro.envs.cleaning_env import SurfaceCleaningEnv
+    from gpt_repro.policies.surfaces_3d import SurfaceConfig
+
+    env = SurfaceCleaningEnv(
+        SurfaceConfig(kind="flat", center=np.array([0.5, 0.0, 0.5])),
+        n_surface_pts=200,
+    )
+    # Count sphere geom entries
+    count = env._xml_string.count('type="sphere"')
+    assert count >= 50, f"Expected >=50 sphere geoms, got {count}"
+    env.close()
+
+
+def test_ee_color_update():
+    """Updating model.geom_rgba in SurfaceCleaningEnv must not raise — Phase 12."""
+    import mujoco
+    from gpt_repro.envs.cleaning_env import SurfaceCleaningEnv
+    from gpt_repro.policies.surfaces_3d import SurfaceConfig
+
+    env = SurfaceCleaningEnv(
+        SurfaceConfig(kind="flat", center=np.array([0.5, 0.0, 0.5])),
+        render_mode="rgb_array",
+    )
+    env.reset(seed=0)
+    ee_id = mujoco.mj_name2id(env._model, mujoco.mjtObj.mjOBJ_GEOM, "ee_geom")
+    # Change EE color to red (simulating high force)
+    env._model.geom_rgba[ee_id] = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    # Should not raise
+    _ = env.render()
+    env.close()

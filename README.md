@@ -55,6 +55,31 @@ pip install -e ".[dev]"
 
 ---
 
+## Animations
+
+3-D rollout animations using GP policy transportation. Each script renders
+kinematic end-effector motion in MuJoCo with force colour-coding
+(blue = low force → red = high force for the cleaning task).
+
+| Task | Preview | Command |
+|------|---------|---------|
+| Reshelving (4 scenes) | ![reshelving](reports/figures/reshelving_rollout.gif) | `python scripts/animate_reshelving.py` |
+| Arm-pose following (4 configs) | ![armpose](reports/figures/armpose_rollout.gif) | `python scripts/animate_armpose.py` |
+| Surface cleaning (5 surfaces) | ![cleaning](reports/figures/cleaning_rollout.gif) | `python scripts/animate_cleaning.py` |
+
+> **Note**: animations show kinematic point-mass EE motion (no articulated robot arm).
+> For fast preview: add `--fast` to any script. For MP4 output: `pip install imageio-ffmpeg`.
+
+Generate all three in one step:
+
+```bash
+python scripts/animate_reshelving.py --seed 0
+python scripts/animate_armpose.py    --seed 0
+python scripts/animate_cleaning.py   --seed 0
+```
+
+---
+
 ## Reproduce all 2D figures (Secs. III–V)
 
 ```bash

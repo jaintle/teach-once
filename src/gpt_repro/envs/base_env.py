@@ -23,21 +23,28 @@ from gymnasium import spaces
 
 
 # ---------------------------------------------------------------------------
-# Minimal MuJoCo XML
+# Base MuJoCo XML — enhanced visuals (Phase 12)
 # ---------------------------------------------------------------------------
 
 _BASE_XML = """
 <mujoco model="kinematic_ee">
   <option gravity="0 0 0" timestep="0.02"/>
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <quality shadowsize="2048"/>
+  </visual>
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1"/>
-    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.8 0.8 0.8 1"
-          pos="0 0 0"/>
+    <light pos="0 0 3" dir="0 0 -1" diffuse="1 1 1" specular="0.3 0.3 0.3"/>
+    <light pos="-1 -1 2" dir="1 1 -1" diffuse="0.5 0.5 0.5" specular="0 0 0"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.72 0.72 0.72 1" pos="0 0 0"/>
+    <camera name="fixed" mode="fixed" pos="1.0 -0.8 1.2" zaxis="-0.523 0.673 -0.523"/>
     <body name="ee_body" pos="0 0 0.5">
       <joint name="ee_x" type="slide" axis="1 0 0" range="-2 2"/>
       <joint name="ee_y" type="slide" axis="0 1 0" range="-2 2"/>
       <joint name="ee_z" type="slide" axis="0 0 1" range="-2 2"/>
-      <geom name="ee_geom" type="sphere" size="0.02" rgba="0.2 0.6 0.9 1"/>
+      <geom name="ee_geom" type="capsule" size="0.025 0.030"
+            fromto="0 0 -0.030 0 0 0.030" rgba="0.2 0.6 0.9 1"/>
     </body>
   </worldbody>
 </mujoco>
@@ -93,7 +100,7 @@ class KinematicEndEffectorEnv(gymnasium.Env):
     def _build_model(self) -> None:
         self._model = mujoco.MjModel.from_xml_string(self._xml_string)
         self._data = mujoco.MjData(self._model)
-        mujoco.mj_kinematics(self._model, self._data)
+        mujoco.mj_forward(self._model, self._data)
 
     def _get_joint_qpos_adr(self) -> Tuple[int, int, int]:
         """Return qpos address indices for the three slide joints."""
@@ -137,15 +144,41 @@ class KinematicEndEffectorEnv(gymnasium.Env):
         truncated = False
         return obs.copy(), reward, terminated, truncated, {}
 
+    # Per-env camera config: override in subclasses.
+    # lookat (3,), distance (float), elevation (deg), azimuth (deg)
+    _CAM_LOOKAT   = np.array([0.3, 0.1, 0.5])
+    _CAM_DISTANCE = 1.34
+    _CAM_ELEVATION = 31.5
+    _CAM_AZIMUTH   = -52.1
+
+    def _make_mjv_camera(self) -> "mujoco.MjvCamera":
+        """Build a programmatic free-camera with the env's view parameters."""
+        cam = mujoco.MjvCamera()
+        cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        cam.lookat = np.array(self._CAM_LOOKAT, dtype=float)
+        cam.distance  = float(self._CAM_DISTANCE)
+        cam.elevation = float(self._CAM_ELEVATION)
+        cam.azimuth   = float(self._CAM_AZIMUTH)
+        return cam
+
     def render(self) -> np.ndarray:
-        """Render a 64×64 RGB frame, returning a black frame on failure."""
+        """Render a 480×480 RGB frame using a programmatic free-camera.
+
+        Returns grey (128) on failure so CI/headless runs degrade gracefully.
+        ``mjCAMERA_FIXED`` is not used because it is broken in headless
+        MuJoCo 3.x on macOS; programmatic ``mjCAMERA_FREE`` works reliably.
+        """
         try:
             if self._renderer is None:
-                self._renderer = mujoco.Renderer(self._model, height=64, width=64)
-            self._renderer.update_scene(self._data)
+                self._renderer = mujoco.Renderer(
+                    self._model, height=480, width=480
+                )
+            cam = self._make_mjv_camera()
+            self._renderer.update_scene(self._data, camera=cam)
             return self._renderer.render()
         except Exception:
-            return np.zeros((64, 64, 3), dtype=np.uint8)
+            # Headless fallback: neutral grey (CI-safe)
+            return np.ones((480, 480, 3), dtype=np.uint8) * 128
 
     def close(self) -> None:
         if self._renderer is not None:
@@ -171,4 +204,4 @@ class KinematicEndEffectorEnv(gymnasium.Env):
         self._data.qpos[ax] = pos[0]
         self._data.qpos[ay] = pos[1]
         self._data.qpos[az] = pos[2]
-        mujoco.mj_kinematics(self._model, self._data)
+        mujoco.mj_forward(self._model, self._data)

@@ -20,27 +20,55 @@ def _build_reshelving_xml(
     obj_pos: np.ndarray,
     goal_pos: np.ndarray,
 ) -> str:
-    """Generate MuJoCo XML with object (red) and goal (green) markers."""
+    """Generate MuJoCo XML with shelf structure, object, goal marker, EE.
+
+    Phase 12: replaced minimal markers with a proper shelf + object visual.
+    """
     op = obj_pos
     gp = goal_pos
+    # Shelf planks: two horizontal boards around goal height
+    shelf_cx, shelf_cy = gp[0], gp[1]
+    shelf_z0 = max(gp[2] - 0.15, 0.1)   # lower plank
+    shelf_z1 = gp[2] + 0.12              # upper plank
     return f"""
 <mujoco model="reshelving">
   <option gravity="0 0 0" timestep="0.02"/>
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <quality shadowsize="2048"/>
+  </visual>
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1"/>
-    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.8 0.8 0.8 1" pos="0 0 0"/>
-    <!-- Object marker (red cube) -->
+    <light pos="0 0 3" dir="0 0 -1" diffuse="1 1 1" specular="0.3 0.3 0.3"/>
+    <light pos="-1 -1 2" dir="1 1 -1" diffuse="0.5 0.5 0.5" specular="0 0 0"/>
+    <camera name="fixed" mode="fixed" pos="0.8 -0.6 1.0" zaxis="-0.557 0.743 -0.371"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.72 0.72 0.72 1" pos="0 0 0"/>
+    <!-- Shelf planks (grey) -->
+    <geom name="shelf_lower" type="box" size="0.30 0.10 0.008"
+          pos="{shelf_cx:.4f} {shelf_cy:.4f} {shelf_z0:.4f}" rgba="0.55 0.45 0.35 1"/>
+    <geom name="shelf_upper" type="box" size="0.30 0.10 0.008"
+          pos="{shelf_cx:.4f} {shelf_cy:.4f} {shelf_z1:.4f}" rgba="0.55 0.45 0.35 1"/>
+    <!-- Shelf side supports -->
+    <geom name="shelf_left" type="box" size="0.008 0.10 0.15"
+          pos="{shelf_cx-0.30:.4f} {shelf_cy:.4f} {(shelf_z0+shelf_z1)/2:.4f}" rgba="0.45 0.35 0.25 1"/>
+    <geom name="shelf_right" type="box" size="0.008 0.10 0.15"
+          pos="{shelf_cx+0.30:.4f} {shelf_cy:.4f} {(shelf_z0+shelf_z1)/2:.4f}" rgba="0.45 0.35 0.25 1"/>
+    <!-- Object (orange box) -->
     <geom name="object_marker" type="box" size="0.05 0.05 0.05"
-          pos="{op[0]:.4f} {op[1]:.4f} {op[2]:.4f}" rgba="0.9 0.2 0.2 0.7"/>
-    <!-- Goal marker (green sphere) -->
-    <geom name="goal_marker" type="sphere" size="0.04"
-          pos="{gp[0]:.4f} {gp[1]:.4f} {gp[2]:.4f}" rgba="0.2 0.8 0.2 0.7"/>
+          pos="{op[0]:.4f} {op[1]:.4f} {op[2]:.4f}" rgba="0.95 0.50 0.10 0.9"/>
+    <!-- AprilTag proxy (dark square on object face) -->
+    <geom name="apriltag_proxy" type="box" size="0.015 0.015 0.002"
+          pos="{op[0]:.4f} {op[1]-0.051:.4f} {op[2]:.4f}" rgba="0.15 0.15 0.15 1"/>
+    <!-- Goal slot (semi-transparent green) -->
+    <geom name="goal_marker" type="box" size="0.055 0.055 0.055"
+          pos="{gp[0]:.4f} {gp[1]:.4f} {gp[2]:.4f}" rgba="0.2 0.85 0.2 0.35"/>
     <!-- End-effector -->
     <body name="ee_body" pos="{op[0]:.4f} {op[1]:.4f} {op[2]:.4f}">
       <joint name="ee_x" type="slide" axis="1 0 0" range="-2 2"/>
       <joint name="ee_y" type="slide" axis="0 1 0" range="-2 2"/>
       <joint name="ee_z" type="slide" axis="0 0 1" range="-2 2"/>
-      <geom name="ee_geom" type="sphere" size="0.02" rgba="0.2 0.6 0.9 1"/>
+      <geom name="ee_geom" type="capsule" size="0.018 0.030"
+            fromto="0 0 -0.030 0 0 0.030" rgba="0.2 0.6 0.9 1"/>
     </body>
   </worldbody>
 </mujoco>
@@ -80,6 +108,12 @@ class ReshelvingEnv(KinematicEndEffectorEnv):
         See :class:`KinematicEndEffectorEnv`.
     """
 
+    import numpy as _np
+    _CAM_LOOKAT    = _np.array([0.15, 0.2, 0.6])
+    _CAM_DISTANCE  = 1.3
+    _CAM_ELEVATION = 25.0
+    _CAM_AZIMUTH   = -40.0
+
     def __init__(
         self,
         scene: Optional[dict] = None,
@@ -97,6 +131,23 @@ class ReshelvingEnv(KinematicEndEffectorEnv):
 
         xml = _build_reshelving_xml(self._obj_pos, self._goal_pos)
         super().__init__(xml_string=xml, render_mode=render_mode)
+
+    def _rebuild_model(self, scene: dict) -> None:
+        """Regenerate MuJoCo model from new scene.
+
+        Recreates model, data, and renderer so new visuals take effect.
+        """
+        self._scene = scene
+        self._obj_pos = scene["object_pose"][:3, 3].copy()
+        self._goal_pos = scene["goal_pose"][:3, 3].copy()
+        self._xml_string = _build_reshelving_xml(self._obj_pos, self._goal_pos)
+        import mujoco as _mj
+        self._model = _mj.MjModel.from_xml_string(self._xml_string)
+        self._data = _mj.MjData(self._model)
+        _mj.mj_forward(self._model, self._data)
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
 
     def reset(
         self,
