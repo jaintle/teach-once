@@ -186,8 +186,10 @@ const ModeReshelving = (() => {
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectory(positions, phaseLabels, 40);
 
-      // Update scene: box ends up at target shelf position
-      Scene.setObjectPos([0.5, shelfY - 0.035, shelfZ]);
+      // Snap box to final resting position on the lower shelf plank.
+      // Lower plank top = shelfY - 0.112; box center = plank top + half box (0.035) = shelfY - 0.077.
+      // This matches the PLACE waypoint y exactly, so there is no visible snap.
+      Scene.setObjectPos([0.5, shelfY - 0.077, shelfZ]);
 
       updatePhaseBadge('DONE ✓');
     } catch (e) {

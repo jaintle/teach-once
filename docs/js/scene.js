@@ -12,8 +12,7 @@ const Scene = (() => {
   // ---------------------------------------------------------------------------
   let renderer, camera, threeScene, controls;
   let armGroup, tableGroup, shelfGroup, objectMesh, eeSphere;
-  let eeWorldMarker = null;  // world-space sphere used during playTrajectory
-  let joints = [];           // 7 THREE.Group pivot points
+  let joints = [];  // 7 THREE.Group pivot points
   let animationId = null;
   let idleRunning = false;
   let canvas;
@@ -30,6 +29,17 @@ const Scene = (() => {
   // Joint rotation axes in Three.js convention (Y = world-up spin, Z = pitch)
   const JOINT_AXES  = ['y', 'z', 'y', 'z', 'y', 'z', 'y'];
   const JOINT_COLOR = 0x3a3a50;
+
+  // Franka Panda hardware joint limits (radians)
+  const JOINT_LIMITS = [
+    [-2.8973,  2.8973],  // q0 — base rotation
+    [-1.7628,  1.7628],  // q1 — shoulder pitch
+    [-2.8973,  2.8973],  // q2 — upper-arm rotation
+    [-3.0718, -0.0698],  // q3 — elbow (always bent, negative)
+    [-2.8973,  2.8973],  // q4 — forearm rotation
+    [-0.0175,  3.7525],  // q5 — wrist pitch
+    [-2.8973,  2.8973],  // q6 — hand rotation
+  ];
 
   // Standard Franka Panda home pose (radians)
   const HOME_ANGLES = [0, -0.785, 0, -2.356, 0, 1.571, 0.785];
@@ -240,39 +250,23 @@ const Scene = (() => {
       prevLen = len;
     }
 
-    // EE glow sphere at tip of last link
+    // EE indicator sphere at tip of last link — subtle during idle, brightens during trajectory
     eeSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.022, 16, 16),
+      new THREE.SphereGeometry(0.020, 16, 16),
       new THREE.MeshStandardMaterial({
         color: 0x00d4ff,
         emissive: 0x00d4ff,
-        emissiveIntensity: 1.2,
+        emissiveIntensity: 0.25,  // subtle during idle — not a blinding orb
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.80,
       }),
     );
     eeSphere.position.y = LINK_LENGTHS[6] + 0.04;
     joints[6].add(eeSphere);
 
-    // Small EE point light for glow effect
-    const eeLight = new THREE.PointLight(0x00d4ff, 0.5, 0.4);
+    // Soft EE point light — just enough to hint at the end-effector
+    const eeLight = new THREE.PointLight(0x00d4ff, 0.15, 0.3);
     eeSphere.add(eeLight);
-
-    // World-space EE trajectory marker — shown during playTrajectory
-    eeWorldMarker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.025, 16, 16),
-      new THREE.MeshStandardMaterial({
-        color: 0x00d4ff,
-        emissive: 0x00d4ff,
-        emissiveIntensity: 1.5,
-        transparent: true,
-        opacity: 0.88,
-      }),
-    );
-    eeWorldMarker.visible = false;
-    const eeWorldLight = new THREE.PointLight(0x00d4ff, 0.8, 0.6);
-    eeWorldMarker.add(eeWorldLight);
-    threeScene.add(eeWorldMarker);
 
     // Arm base sits on the table surface (world y=0.75)
     armGroup.position.set(0.0, 0.75, 0.0);
@@ -478,72 +472,169 @@ const Scene = (() => {
   }
 
   // ---------------------------------------------------------------------------
-  // Visual IK approximation — makes the arm reach toward a world-space target
-  // Not mathematically exact; purely cosmetic for browser demo
+  // Jacobian IK — accurate end-effector positioning via Damped Least Squares
+  // Mirrors buildFrankaArm() chain exactly: no Three.js objects, pure math.
   // ---------------------------------------------------------------------------
-  function _visualIKApprox(target) {
-    if (!joints || joints.length < 7 || !armGroup) return;
-    const [tx, ty, tz] = target;
 
-    // Horizontal offset from arm base (armGroup at world y=0.75, x=0, z=0)
-    const dx = tx; // arm base at x=0
-    const dz = tz; // arm base at z=0
-    const dy = ty - 0.75; // vertical above mount
+  // Link lengths along local +Y for each joint step.
+  // Index 6 includes the eeSphere offset (LINK_LENGTHS[6] + 0.04 = 0.13).
+  const _FK_LINKS = [0.20, 0.28, 0.05, 0.28, 0.22, 0.10, 0.13];
 
-    // Joint 0 (Y rotation): yaw arm to face target in XZ plane
-    // When rot.y=0, arm's reach is along +X after shoulder pitch
-    joints[0].rotation.y = Math.atan2(-dz, Math.max(0.01, dx));
+  // 3×3 rotation about local Y
+  function _Ry(t) {
+    const c = Math.cos(t), s = Math.sin(t);
+    return [[c, 0, s], [0, 1, 0], [-s, 0, c]];
+  }
 
-    // Joint 1 (Z rotation, shoulder pitch): blend toward target height+distance
-    const horizDist = Math.sqrt(dx * dx + dz * dz);
-    const targetPitch = -Math.atan2(dy, Math.max(0.15, horizDist) * 0.85);
-    joints[1].rotation.z = HOME_ANGLES[1] * 0.35 + targetPitch * 0.65;
-    joints[1].rotation.y = 0;
+  // 3×3 rotation about local Z
+  function _Rz(t) {
+    const c = Math.cos(t), s = Math.sin(t);
+    return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
+  }
 
-    // Joint 3 (Z rotation, elbow): extend/contract based on reach distance
-    const reach = Math.sqrt(dx * dx + dz * dz + dy * dy);
-    joints[3].rotation.z = HOME_ANGLES[3] + Math.min(1.4, reach * 0.8) * 0.45;
-    joints[3].rotation.y = 0;
+  // 3×3 matrix multiply
+  function _m3mul(A, B) {
+    const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++)
+        for (let k = 0; k < 3; k++)
+          C[i][j] += A[i][k] * B[k][j];
+    return C;
+  }
 
-    // Keep remaining joints near home
-    joints[2].rotation.y = HOME_ANGLES[2];  joints[2].rotation.z = 0;
-    joints[4].rotation.y = HOME_ANGLES[4];  joints[4].rotation.z = 0;
-    joints[5].rotation.z = HOME_ANGLES[5];  joints[5].rotation.y = 0;
-    joints[6].rotation.y = HOME_ANGLES[6];  joints[6].rotation.z = 0;
+  // Apply 3×3 rotation to a 3-vector
+  function _m3v(R, v) {
+    return [
+      R[0][0]*v[0] + R[0][1]*v[1] + R[0][2]*v[2],
+      R[1][0]*v[0] + R[1][1]*v[1] + R[1][2]*v[2],
+      R[2][0]*v[0] + R[2][1]*v[1] + R[2][2]*v[2],
+    ];
+  }
+
+  // 3×3 matrix inverse via Cramer's rule — safe for well-conditioned 3×3
+  function _inv3(M) {
+    const [[a, b, c], [d, e, f], [g, h, i]] = M;
+    const det = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+    if (Math.abs(det) < 1e-12) return [[1,0,0],[0,1,0],[0,0,1]];
+    const s = 1.0 / det;
+    return [
+      [(e*i-f*h)*s, (c*h-b*i)*s, (b*f-c*e)*s],
+      [(f*g-d*i)*s, (a*i-c*g)*s, (c*d-a*f)*s],
+      [(d*h-e*g)*s, (b*g-a*h)*s, (a*e-b*d)*s],
+    ];
+  }
+
+  // Forward kinematics — returns world-space EE position [x, y, z].
+  // Chain: armGroup(0,0.75,0) → +0.10(base) → joint[0..6] rotations + links
+  function _fk(angles) {
+    let p = [0, 0.85, 0];  // armGroup.y=0.75 + joint[0] offset=0.10
+    let R = [[1,0,0],[0,1,0],[0,0,1]];
+    for (let i = 0; i < 7; i++) {
+      const Rj = JOINT_AXES[i] === 'y' ? _Ry(angles[i]) : _Rz(angles[i]);
+      R = _m3mul(R, Rj);
+      const v = _m3v(R, [0, _FK_LINKS[i], 0]);
+      p = [p[0]+v[0], p[1]+v[1], p[2]+v[2]];
+    }
+    return p;
+  }
+
+  // Numerical Jacobian — 3×7 matrix (rows=xyz, cols=joints)
+  function _jac(angles) {
+    const eps = 0.001;
+    const ee0 = _fk(angles);
+    const J = [[], [], []];
+    for (let j = 0; j < 7; j++) {
+      const qp = [...angles];
+      qp[j] += eps;
+      const ee1 = _fk(qp);
+      J[0].push((ee1[0]-ee0[0]) / eps);
+      J[1].push((ee1[1]-ee0[1]) / eps);
+      J[2].push((ee1[2]-ee0[2]) / eps);
+    }
+    return J;
+  }
+
+  // Damped Least Squares IK (Levenberg–Marquardt).
+  // Warm-start from q0; iterates until EE error < tol or maxIter reached.
+  // dq = J^T (J J^T + λ²I)^{-1} · err
+  function _solveIK(target, q0, maxIter = 14, tol = 0.004) {
+    const lambda = 0.06;   // damping — raises stability in near-singular configs
+    const l2 = lambda * lambda;
+    const maxStep = 0.25;  // max radians per joint per iteration
+    let q = [...q0];
+
+    for (let iter = 0; iter < maxIter; iter++) {
+      const ee  = _fk(q);
+      const err = [target[0]-ee[0], target[1]-ee[1], target[2]-ee[2]];
+      if (err[0]**2 + err[1]**2 + err[2]**2 < tol*tol) break;
+
+      const J = _jac(q);
+
+      // JJT = J · J^T  (3×3)
+      const JJT = [[0,0,0],[0,0,0],[0,0,0]];
+      for (let i = 0; i < 3; i++)
+        for (let k = 0; k < 3; k++)
+          for (let j = 0; j < 7; j++)
+            JJT[i][k] += J[i][j] * J[k][j];
+
+      // M = JJT + λ²I,  then M^{-1} · err
+      const M = JJT.map((row, i) => row.map((v, k) => v + (i===k ? l2 : 0)));
+      const Minv = _inv3(M);
+      const Me = [0, 0, 0];
+      for (let i = 0; i < 3; i++)
+        for (let k = 0; k < 3; k++)
+          Me[i] += Minv[i][k] * err[k];
+
+      // dq = J^T · Me,  clamped + joint-limited
+      for (let j = 0; j < 7; j++) {
+        let dqj = 0;
+        for (let i = 0; i < 3; i++) dqj += J[i][j] * Me[i];
+        q[j] = Math.max(JOINT_LIMITS[j][0],
+               Math.min(JOINT_LIMITS[j][1],
+               q[j] + Math.max(-maxStep, Math.min(maxStep, dqj))));
+      }
+    }
+    return q;
   }
 
   // ---------------------------------------------------------------------------
   // Trajectory playback — W3
   // positions: (N, 3) world-space EE positions (Three.js Y-up)
   // phaseLabels: (N,) string label per frame
+  // Uses Jacobian IK so the arm genuinely reaches each EE target.
+  // Warm-starts each frame from the previous frame's joint angles for smooth motion.
   // ---------------------------------------------------------------------------
   async function playTrajectory(positions, phaseLabels, dt = 50) {
     stopIdle();
     const badge = document.getElementById('mode-badge');
 
-    // Show world-space EE marker, dim arm's own EE sphere
-    if (eeWorldMarker) eeWorldMarker.visible = true;
-    if (eeSphere) eeSphere.visible = false;
+    // Brighten EE sphere during active execution
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 1.0;
+      eeSphere.material.opacity = 0.95;
+    }
 
-    // Remember original box y (table surface)
-    const origBoxY = objectMesh ? objectMesh.position.y : 0.785;
+    // Warm-start IK from current arm pose
+    let currentAngles = [...HOME_ANGLES];
 
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
       const label = (phaseLabels && phaseLabels[i]) || '';
 
-      // Update world-space EE marker
-      if (eeWorldMarker) eeWorldMarker.position.set(pos[0], pos[1], pos[2]);
-
-      // Approximate visual IK
-      _visualIKApprox(pos);
+      // Solve IK — warm-started from previous frame → smooth joint motion
+      currentAngles = _solveIK(pos, currentAngles);
+      setArmPose(currentAngles);
 
       // Update mode badge
       if (badge && label) badge.textContent = 'Reshelving · ' + label;
 
-      // Box follows EE during CARRY and PLACE
-      if (objectMesh && (label === 'CARRY' || label === 'PLACE')) {
-        objectMesh.position.set(pos[0], pos[1] - 0.045, pos[2]);
+      // Box follows EE from GRASP onwards (EE is at box center — offset 0).
+      // GRASP: arm is at box, box stays put visually (they coincide).
+      // LIFT:  arm rises, box rises with it → visible pickup.
+      // CARRY/PLACE: box moves with arm to shelf.
+      // RETREAT: not included → box stays on shelf as arm pulls away.
+      if (objectMesh && (label === 'GRASP' || label === 'LIFT' || label === 'CARRY' || label === 'PLACE')) {
+        objectMesh.position.set(pos[0], pos[1], pos[2]);
       }
 
       controls.update();
@@ -551,9 +642,11 @@ const Scene = (() => {
       await new Promise((r) => setTimeout(r, dt));
     }
 
-    // Restore
-    if (eeWorldMarker) eeWorldMarker.visible = false;
-    if (eeSphere) eeSphere.visible = true;
+    // Restore EE sphere to idle appearance
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 0.25;
+      eeSphere.material.opacity = 0.80;
+    }
 
     setArmPose(HOME_ANGLES);
     startIdle();
@@ -568,9 +661,11 @@ const Scene = (() => {
     if (objectMesh) objectMesh.position.set(0.5, 0.785, 0.0);
     if (shelfGroup) shelfGroup.position.set(0.5, 0.9, -0.7);
 
-    // Restore EE marker visibility (may have been left visible by interrupted trajectory)
-    if (eeWorldMarker) eeWorldMarker.visible = false;
-    if (eeSphere) eeSphere.visible = true;
+    // Restore EE sphere to idle appearance (may have been brightened during trajectory)
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 0.25;
+      eeSphere.material.opacity = 0.80;
+    }
 
     // Draw once immediately so the reset is visible right away
     if (renderer && threeScene && camera) renderer.render(threeScene, camera);

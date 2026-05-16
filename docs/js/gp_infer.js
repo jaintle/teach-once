@@ -536,7 +536,7 @@ const DEMO_DATA = {
     [0.50, 0.785, 0.000],  // 1: grasp     — at box
     [0.50, 1.060, 0.000],  // 2: lift      — lifted clear of table
     [0.50, 1.060, -0.700], // 3: carry     — above shelf
-    [0.50, 0.900, -0.700], // 4: place     — into shelf slot
+    [0.50, 0.823, -0.700], // 4: place     — onto lower plank (shelfY - 0.077 = 0.823)
     [0.50, 1.060, -0.700], // 5: retreat   — lift back up
   ],
 
