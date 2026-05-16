@@ -1407,3 +1407,42 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 - Increasing gp_n_iter to 500+ or using a nonzero-mean GP (constant mean toward goal) would improve convergence.
 - The impedance controller could be augmented with a terminal attracting potential for goal-reaching; not in paper scope.
 - Physics at dt=0.001 is more stable but doubles runtime; dt=0.002 is adequate for demonstration purposes.
+
+---
+
+## Phase W1 — Website Shell, Hero, Highlight Reel
+
+**Date:** 2026-05-16
+**Paper section(s) / Website section:** W1 — Static site shell
+
+**Files added/changed:**
+- `docs/css/style.css` — created (full design system, 13 sections, ~350 lines)
+- `docs/index.html` — replaced placeholder (full single-page structure, 335 lines)
+- `docs/js/ui.js` — created (stub for W3/W4)
+- `docs/js/scene.js` — created (stub for W2)
+- `docs/js/gp_infer.js` — created (stub for W3)
+
+**What works:**
+- Dark aesthetic loads immediately (--bg-primary #0a0a0f, no white flash)
+- Inter + JetBrains Mono loaded from Google Fonts
+- Sticky nav with blur backdrop, smooth-scroll anchors, IntersectionObserver active states
+- Hero: animated grid background, staggered fade-up on load, badge, headline, sub, CTA buttons, scroll hint
+- Three task cards (reshelving / cleaning / arm-pose) with GIF embeds and mouse-follow ripple
+- Full-width final_highlight.gif reel below cards
+- Four "How it works" step cards (2×2 grid), placeholder for W5
+- Results placeholder section
+- Three-column footer
+- Responsive at 768px and 480px breakpoints
+- prefers-reduced-motion handled
+
+**What was tricky:**
+- hero__scroll-hint bounce animation conflicts with fade-up; resolved with !important override and staggered delay chaining.
+
+**Math/equation references implemented:** None (W1 is visual only)
+
+**Numerical sanity checks passed:** N/A
+
+**Open questions / deferred work:**
+- Three.js canvas (W2)
+- Interactive GP modes (W3/W4)
+- Actual algorithm figures (W5)

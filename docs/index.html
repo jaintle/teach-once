@@ -3,38 +3,332 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>teach-once — TP-GPT Interactive Demo</title>
-  <style>
-    body { 
-      margin: 0; 
-      background: #0d0d1a; 
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      flex-direction: column;
-      gap: 16px;
-    }
-    h1 { font-size: 3rem; margin: 0; letter-spacing: -1px; }
-    p  { color: #888; font-size: 1.1rem; margin: 0; }
-    .badge {
-      background: #00d4ff22;
-      border: 1px solid #00d4ff44;
-      color: #00d4ff;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-    }
-  </style>
+  <title>teach-once — TP-GPT Demo</title>
+  <meta name="description" content="Interactive demo of TP-GPT: show a robot a task once, it generalizes everywhere.">
+
+  <!-- Open Graph -->
+  <meta property="og:title"       content="teach-once — TP-GPT Demo">
+  <meta property="og:description" content="Interactive demo of TP-GPT: show a robot a task once, it generalizes everywhere.">
+  <meta property="og:image"       content="assets/gifs/final_highlight.gif">
+  <meta property="og:type"        content="website">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Three.js CDN — used in W2 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 </head>
 <body>
-  <span class="badge">TP-GPT — Franzese et al. 2024</span>
-  <h1>teach-once</h1>
-  <p>Show it once. It generalizes everywhere.</p>
-  <p style="color: #555; font-size: 0.9rem;">
-    Interactive demo coming soon.
-  </p>
+
+  <!-- =====================================================================
+       NAVIGATION
+       ===================================================================== -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="nav__inner">
+      <a href="#hero" class="nav__wordmark">teach-once</a>
+      <ul class="nav__links">
+        <li><a href="#demo"          data-nav>Demo</a></li>
+        <li><a href="#how-it-works"  data-nav>How it works</a></li>
+        <li><a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Paper</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- =====================================================================
+       HERO
+       ===================================================================== -->
+  <section id="hero" class="hero">
+    <div class="hero__grid" aria-hidden="true"></div>
+
+    <div class="hero__content">
+      <span class="hero__badge">⚡ TP-GPT · Franzese et al. 2024</span>
+
+      <h1 class="hero__headline">
+        <span class="hero__line1">Show it once.</span>
+        <span class="hero__line2">It generalizes <span class="accent">everywhere.</span></span>
+      </h1>
+
+      <p class="hero__sub">
+        TP-GPT learns a robot policy from a single demonstration.
+        Drag objects, draw paths, or pose the arm — watch it adapt in real time.
+      </p>
+
+      <div class="hero__ctas">
+        <a href="#demo" class="btn btn--primary js-smooth-scroll">Try the demo →</a>
+        <a href="https://arxiv.org/abs/2404.13458"
+           target="_blank" rel="noopener"
+           class="btn btn--secondary">Read the paper</a>
+      </div>
+    </div>
+
+    <span class="hero__scroll-hint" aria-hidden="true">↓ scroll</span>
+  </section>
+
+  <!-- =====================================================================
+       HIGHLIGHT REEL
+       ===================================================================== -->
+  <section id="highlight" class="highlight">
+    <div class="container">
+
+      <div class="highlight__header">
+        <p class="section-label">Generalization in action</p>
+        <h2>One demonstration. Three tasks. Zero retraining.</h2>
+      </div>
+
+      <!-- Three task cards -->
+      <div class="task-cards js-card-ripple">
+
+        <div class="task-card">
+          <p class="task-card__label">Reshelving</p>
+          <img
+            class="task-card__gif"
+            src="assets/gifs/final_reshelving.gif"
+            alt="TP-GPT reshelving: pick-and-place adapts to new object and goal positions"
+            loading="lazy"
+          >
+          <p class="task-card__desc">
+            TP-GPT transports pick-place policy to new object/goal positions
+          </p>
+        </div>
+
+        <div class="task-card">
+          <p class="task-card__label">Cleaning</p>
+          <img
+            class="task-card__gif"
+            src="assets/gifs/final_cleaning.gif"
+            alt="TP-GPT cleaning: wipe path morphs to shifted surface"
+            loading="lazy"
+          >
+          <p class="task-card__desc">
+            TP-GPT adapts cleaning path to shifted surface
+          </p>
+        </div>
+
+        <div class="task-card">
+          <p class="task-card__label">Arm-pose</p>
+          <img
+            class="task-card__gif"
+            src="assets/gifs/final_armpose.gif"
+            alt="TP-GPT arm-pose: traces path through new arm configuration"
+            loading="lazy"
+          >
+          <p class="task-card__desc">
+            TP-GPT traces path through new arm configuration
+          </p>
+        </div>
+
+      </div><!-- /.task-cards -->
+
+      <!-- Full-width highlight reel -->
+      <div class="highlight__reel-wrap">
+        <img
+          class="highlight__reel"
+          src="assets/gifs/final_highlight.gif"
+          alt="TP-GPT highlight reel: all three tasks"
+          loading="lazy"
+        >
+        <p class="highlight__caption">
+          Three tasks · Single demonstration each · Franka Panda arm · MuJoCo kinematic simulation
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       DEMO  (Three.js canvas injected in W2)
+       ===================================================================== -->
+  <section id="demo" class="demo">
+    <div class="container">
+
+      <p class="section-label">Interactive demo</p>
+      <h2 style="margin-bottom: var(--space-lg);">Try it yourself</h2>
+
+      <!-- Three.js canvas injected in W2 -->
+      <div class="demo__placeholder" id="demo-canvas-root">
+        <span class="demo__placeholder-badge">Coming in W2</span>
+        <p class="demo__placeholder-label">Three.js interactive scene loading in W2…</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       HOW IT WORKS  (figures replaced in W5)
+       ===================================================================== -->
+  <section id="how-it-works" class="how">
+    <div class="container">
+
+      <div class="how__header">
+        <p class="section-label">Algorithm</p>
+        <h2>The TP-GPT Algorithm</h2>
+        <p style="max-width:560px; margin:var(--space-md) auto 0;">
+          Gaussian Process Transportation maps a learned velocity field
+          to any new task configuration — no retraining required.
+        </p>
+      </div>
+
+      <div class="step-grid">
+
+        <div class="step-card">
+          <span class="step-card__number">01</span>
+          <p class="step-card__title">Learn from demonstration</p>
+          <p class="step-card__desc">A GP fits the velocity field from a single demo.</p>
+          <div class="step-card__img-placeholder">figure coming in W5</div>
+        </div>
+
+        <div class="step-card">
+          <span class="step-card__number">02</span>
+          <p class="step-card__title">Track keypoints</p>
+          <p class="step-card__desc">Source and target point sets define the scene change.</p>
+          <div class="step-card__img-placeholder">figure coming in W5</div>
+        </div>
+
+        <div class="step-card">
+          <span class="step-card__number">03</span>
+          <p class="step-card__title">Transport the policy</p>
+          <p class="step-card__desc">ϕ(x) = γ(x) + ψ(γ(x)) maps the policy to the new scene.</p>
+          <div class="step-card__img-placeholder">figure coming in W5</div>
+        </div>
+
+        <div class="step-card">
+          <span class="step-card__number">04</span>
+          <p class="step-card__title">Execute with uncertainty</p>
+          <p class="step-card__desc">Epistemic and transportation uncertainty guide execution.</p>
+          <div class="step-card__img-placeholder">figure coming in W5</div>
+        </div>
+
+      </div><!-- /.step-grid -->
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       RESULTS  (placeholder for W5)
+       ===================================================================== -->
+  <section id="results" class="results">
+    <div class="container">
+
+      <div class="results__header">
+        <p class="section-label">Quantitative results</p>
+        <h2>Benchmarks</h2>
+      </div>
+
+      <div class="results__placeholder">
+        Comparison figures and tables — reproduced in W5
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       FOOTER
+       ===================================================================== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__inner">
+
+        <div class="footer__left">
+          <span class="footer__wordmark">teach-once</span>
+          <p class="footer__tagline">
+            Show a robot once.<br>
+            It generalizes everywhere.
+          </p>
+        </div>
+
+        <ul class="footer__links">
+          <li><a href="#demo">Demo</a></li>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li><a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Paper (arXiv)</a></li>
+          <li><a href="https://github.com/jaintle/teach-once" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+
+        <div class="footer__right">
+          <p class="footer__credit">
+            Built by Abhinav Jain<br>
+            Based on Franzese et al. 2024
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </footer>
+
+  <!-- =====================================================================
+       SCRIPTS
+       ===================================================================== -->
+  <script src="js/gp_infer.js" defer></script>
+  <script src="js/scene.js"    defer></script>
+  <script src="js/ui.js"       defer></script>
+
+  <script>
+    // -------------------------------------------------------------------------
+    // Page load sequence — add 'loaded' class to trigger staggered hero anims
+    // -------------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', function () {
+      requestAnimationFrame(function () {
+        document.body.classList.add('loaded');
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Smooth scroll for CTA button (cross-browser)
+    // -------------------------------------------------------------------------
+    document.querySelectorAll('.js-smooth-scroll, [data-nav]').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        var href = this.getAttribute('href');
+        if (!href || !href.startsWith('#')) return;
+        var target = document.querySelector(href);
+        if (!target) return;
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Nav active state via IntersectionObserver
+    // -------------------------------------------------------------------------
+    (function () {
+      var navLinks = document.querySelectorAll('[data-nav]');
+      var sections = Array.from(navLinks).map(function (link) {
+        var id = link.getAttribute('href').replace('#', '');
+        return document.getElementById(id);
+      }).filter(Boolean);
+
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              navLinks.forEach(function (link) { link.classList.remove('active'); });
+              var active = document.querySelector('[data-nav][href="#' + entry.target.id + '"]');
+              if (active) active.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: '-40% 0px -55% 0px', threshold: 0 }
+      );
+
+      sections.forEach(function (s) { observer.observe(s); });
+    })();
+
+    // -------------------------------------------------------------------------
+    // Card hover ripple — track mouse position per card
+    // -------------------------------------------------------------------------
+    document.querySelectorAll('.task-card').forEach(function (card) {
+      card.addEventListener('mousemove', function (e) {
+        var rect = card.getBoundingClientRect();
+        var x = ((e.clientX - rect.left) / rect.width  * 100).toFixed(1) + '%';
+        var y = ((e.clientY - rect.top)  / rect.height * 100).toFixed(1) + '%';
+        card.style.setProperty('--mouse-x', x);
+        card.style.setProperty('--mouse-y', y);
+      });
+    });
+  </script>
+
 </body>
 </html>
