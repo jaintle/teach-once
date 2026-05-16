@@ -160,6 +160,11 @@
           <span class="render-info" id="render-info">Three.js · TP-GPT inference</span>
         </div>
 
+        <!-- Bottom hint overlay -->
+        <div class="canvas-hint-bar">
+          <span class="canvas-hint">Drag to rotate · Scroll to zoom</span>
+        </div>
+
         <!-- GIF fallback: shown only if JS is disabled -->
         <noscript>
           <img src="assets/gifs/final_highlight.gif"
@@ -315,13 +320,16 @@
 
   <!-- =====================================================================
        SCRIPTS — loaded synchronously at bottom of body
-       Order: three.js → OrbitControls → scene.js → gp_infer.js → mode_reshelving.js → ui.js
+       Order: three.js → OrbitControls → scene.js → gp_infer.js
+              → mode_reshelving.js → mode_cleaning.js → mode_armpose.js → ui.js
        ===================================================================== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/gp_infer.js"></script>
   <script src="js/mode_reshelving.js"></script>
+  <script src="js/mode_cleaning.js"></script>
+  <script src="js/mode_armpose.js"></script>
   <script src="js/ui.js"></script>
 
   <!-- Three.js load error → show GIF fallback -->
@@ -407,36 +415,7 @@
       });
     });
 
-    // -------------------------------------------------------------------------
-    // Mode tabs — visual switch (logic wired in W3/W4)
-    // -------------------------------------------------------------------------
-    document.querySelectorAll('.mode-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        document.querySelectorAll('.mode-tab').forEach(function (t) {
-          t.classList.remove('active');
-        });
-        tab.classList.add('active');
-        var mode = tab.dataset.mode;
-        var badge = document.getElementById('mode-badge');
-        var labels = {
-          reshelving: 'Mode 1: Reshelving',
-          cleaning:   'Mode 2: Cleaning',
-          armpose:    'Mode 3: Arm-pose',
-        };
-        if (badge) badge.textContent = labels[mode] || mode;
-        if (typeof Scene !== 'undefined') Scene.loadScene(mode);
-      });
-    });
-
-    // -------------------------------------------------------------------------
-    // Reset button
-    // -------------------------------------------------------------------------
-    var resetBtn = document.getElementById('btn-reset');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', function () {
-        if (typeof Scene !== 'undefined') Scene.resetScene();
-      });
-    }
+    // Mode tabs and reset button are now wired in ui.js (W4).
   </script>
 
 </body>

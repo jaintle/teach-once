@@ -1555,3 +1555,84 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 - Cleaning path draw (W4)
 - Arm-pose drag (W4)
 - Actual robot figures in How It Works (W5)
+
+---
+
+## Phase W4 — Mode 2 Cleaning + Mode 3 Arm-pose + GIF Fallback + Mode Switching
+
+**Date:** 2026-05-17
+
+**Website section implemented:** W4
+
+**Files added/changed:**
+- `docs/js/scene.js` — Added: `_clearModeObjects`, `_setupCleaningScene`, `_setupArmPoseScene`, `_updateBones`, updated `loadScene` and `resetScene`, added public: `drawPath`, `clearPath`, `updateSurfaceMesh`, `updateKeypointSpheres`, `flashKeypoint`, `playTrajectoryClean`, `playTrajectoryArmpose`. Updated return object.
+- `docs/js/mode_cleaning.js` — New file. Mode 2: surface type selector (flat/tilted/curved/bumpy), tilt slider, TP-GPT transport of 4-stroke raster scan demo. Coverage metric.
+- `docs/js/mode_armpose.js` — New file. Mode 3: 4-keypoint (shoulder/elbow/wrist/hand) sliders + presets, TP-GPT transport of approach→trace→retreat path, keypoint flash on reach.
+- `docs/js/ui.js` — Replaced entirely. Full mode switching via `switchMode()`, generalize/reset button delegation to current mode, GIF fallback toggle.
+- `docs/index.html` — Added mode_cleaning.js + mode_armpose.js script tags; added canvas-controls and gif-fallback HTML; removed duplicate inline mode-tab/reset handlers.
+- `docs/css/style.css` — Appended: `.surface-selector`, `.surface-btn`, `.keypoint-controls`, `.keypoint-group`, `.keypoint-header`, `.keypoint-dot`, `.keypoint-name`, `.canvas-controls`, `.btn-tertiary`, `.canvas-hint`, `#gif-fallback`.
+
+**What works:**
+- `loadScene('cleaning')` hides box, adds light-blue surface mesh that tilts/recolors via `updateSurfaceMesh`.
+- `loadScene('armpose')` hides box + shelf, adds 4 colored keypoint spheres with bone lines.
+- Mode switching via tabs: `switchMode(mode)` resets scene, loads geometry, inits control panel.
+- Generalize button delegates to current mode's `generalize()`.
+- Reset button delegates to current mode's `reset()`.
+- GIF fallback toggle hides canvas, shows pre-recorded GIF matching current mode.
+- All JS files parse clean (node --check). All brace counts balanced.
+
+**What was tricky:**
+- `loadScene` must call `resetScene` → `_clearModeObjects` → restore visibility → then add mode overlays. Order matters to avoid leftover objects.
+- Duplicate inline mode-tab handlers in index.html conflicted with ui.js; removed them.
+- `updateKeypointSpheres` triggers a manual `renderer.render()` call so slider dragging feels immediate.
+
+**Math/equation references:**
+- `getSurfaceKeypoints`: task parameterization — source S_FLAT → target T by geometric transform (Sec. IV).
+- `buildArmposeKeypoints`: cross-pattern expansion matching S structure (Sec. V-B).
+- `TPGPTTransport.fit/transform`: Eq. (7) ϕ(x) = γ(x) + ψ(γ(x)).
+
+**Numerical sanity checks passed:**
+- All JS files: `node --check` → OK.
+- Brace balance: scene (122/122), cleaning (43/43), armpose (77/77), ui (23/23).
+
+**Open questions / deferred work:**
+- W5: animated "How it works" step figures, results section polish.
+- GIF assets for cleaning and armpose (`final_cleaning.gif`, `final_armpose.gif`) must exist under `docs/assets/gifs/` for the fallback to display.
+- Visual browser test required to confirm rendering (no headless test runner available).
+
+---
+
+## Phase W4-patch — Cleaning Mode Bug Fixes
+
+**Date:** 2026-05-17
+
+**Website section:** W4 cleaning mode (mode_cleaning.js, scene.js, ui.js)
+
+**Files changed:**
+- `docs/js/scene.js` — `_drawSpill(ctx, type)` updated to support 'scatter'/'puddle'/'line'; added public `resetSpillCanvas(type)` method
+- `docs/js/mode_cleaning.js` — full rewrite: 3 mess presets (Scatter/Puddle/Line) each with matched waypoints/phases, 6-stroke raster for scatter, tilt slider resets spill, button enabled on init
+- `docs/js/ui.js` — moved `btn.disabled` before `init()` call so cleaning mode button is enabled immediately
+
+**What works:**
+- Coverage no longer stuck at ~75%: 6-stroke raster with 11px overlap covers entire canvas including central blob
+- "Generalize TP-GPT" button is enabled immediately when switching to cleaning mode
+- Tilt slider now resets spill canvas to fresh state (old trail cleared, pixel count restarted)
+- Three mess presets: Scatter (full-table multi-blob), Puddle (central circle), Line (horizontal streak)
+- Each preset's demo waypoints geometrically match its spill shape
+
+**What was tricky:**
+- Phase count must equal `fullPath.length - 1`; verified algebraically and with a Node.js script
+- Six strokes at z = -0.140, -0.084, -0.028, 0.028, 0.084, 0.140 → 41px center spacing, 11px overlap, no gaps
+- TRANSIT phases (between strokes) must NOT startWith('STROKE') so they don't erase or trail
+- `btn.disabled` in ui.js `switchMode()` was overwriting `init()`'s enabled state — fixed by reordering
+
+**Math / equations:** None (UI/UX fix only)
+
+**Numerical sanity checks:**
+- Node.js: all 3 presets have phases.length === fullPath.length - 1 ✓
+- Coverage math: 6-stroke raster + 26px arc radius → 11px overlap between strokes ✓
+- Central blob at canvas v=128 hit by strokes 3 (v=[82,134]) and 4 (v=[122,174]) ✓
+
+**Open questions / deferred work:**
+- W5: How-it-works animated figures, results section polish
+- Mobile responsiveness pass

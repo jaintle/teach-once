@@ -1,68 +1,126 @@
-// ui.js — Interactive controls, metrics panel, mode switching
-// teach-once · TP-GPT demo · Franzese et al. 2024
-// Populated in W3 (reshelving), W4 (cleaning, armpose)
+// ui.js — Mode switching, button wiring, fallback GIF toggle
+// teach-once · TP-GPT · W4
 'use strict';
 
-/* global Scene, ModeReshelving */
+/* global Scene, ModeReshelving, ModeCleaning, ModeArmpose */
 
-document.addEventListener('DOMContentLoaded', function () {
-  console.log('teach-once UI loaded');
+const FALLBACK_GIFS = {
+  reshelving: 'assets/gifs/final_reshelving.gif',
+  cleaning:   'assets/gifs/final_cleaning.gif',
+  armpose:    'assets/gifs/final_armpose.gif',
+};
 
-  // Initialize reshelving mode (default)
+let currentMode    = 'reshelving';
+let showingFallback = false;
+
+// ---------------------------------------------------------------------------
+// Mode switching
+// ---------------------------------------------------------------------------
+function switchMode(mode) {
+  if (mode === currentMode && !showingFallback) return;
+  currentMode = mode;
+
+  // Update tab active state
+  document.querySelectorAll('.mode-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mode === mode);
+  });
+
+  // Update mode badge
+  const modeNames = {
+    reshelving: 'Mode 1: Reshelving',
+    cleaning:   'Mode 2: Cleaning',
+    armpose:    'Mode 3: Arm-pose',
+  };
+  const badge = document.getElementById('mode-badge');
+  if (badge) badge.textContent = modeNames[mode] || mode;
+
+  // Reset scene geometry + clear overlays, then load new scene
+  try { Scene.resetScene(); } catch (e) { console.warn('[ui] resetScene error:', e); }
+  try { Scene.loadScene(mode); } catch (e) { console.warn('[ui] loadScene error:', e); }
+
+  // Reset generalize button BEFORE mode init() runs, so init() can override the state.
+  // Reshelving: starts disabled (user must move objects before generalizing).
+  // Cleaning + Armpose: init() will enable the button immediately.
+  const btn = document.getElementById('btn-generalize');
+  if (btn) {
+    btn.textContent = 'Generalize TP-GPT →';
+    btn.disabled = (mode === 'reshelving');
+  }
+
+  // Init mode-specific control panel — may enable/disable button
+  try {
+    if      (mode === 'reshelving' && typeof ModeReshelving !== 'undefined') ModeReshelving.init();
+    else if (mode === 'cleaning'   && typeof ModeCleaning   !== 'undefined') ModeCleaning.init();
+    else if (mode === 'armpose'    && typeof ModeArmpose    !== 'undefined') ModeArmpose.init();
+  } catch (e) { console.warn('[ui] mode init error:', e); }
+
+  // Update fallback GIF src (preload)
+  const gifImg = document.querySelector('#gif-fallback img');
+  if (gifImg) gifImg.src = FALLBACK_GIFS[mode] || '';
+}
+
+// ---------------------------------------------------------------------------
+// GIF fallback toggle
+// ---------------------------------------------------------------------------
+function setupFallbackToggle() {
+  const btn = document.getElementById('btn-fallback');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => {
+    showingFallback = !showingFallback;
+    const wrapper  = document.querySelector('.canvas-wrapper');
+    const fallback = document.getElementById('gif-fallback');
+
+    if (showingFallback) {
+      if (wrapper)  wrapper.style.display  = 'none';
+      if (fallback) fallback.style.display = 'block';
+      btn.textContent = 'Show live demo ↑';
+    } else {
+      if (wrapper)  wrapper.style.display  = 'block';
+      if (fallback) fallback.style.display = 'none';
+      btn.textContent = 'Show pre-recorded ↓';
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// DOMContentLoaded — wire everything
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('teach-once UI loaded (W4)');
+
+  // Default mode init
   if (typeof ModeReshelving !== 'undefined') {
     ModeReshelving.init();
   }
 
-  // Generalize button
+  // Generalize button — delegates to current mode
   const btnGen = document.getElementById('btn-generalize');
   if (btnGen) {
-    btnGen.addEventListener('click', function () {
-      if (typeof ModeReshelving !== 'undefined') {
-        ModeReshelving.generalize();
-      }
+    btnGen.addEventListener('click', () => {
+      if      (currentMode === 'reshelving' && typeof ModeReshelving !== 'undefined') ModeReshelving.generalize();
+      else if (currentMode === 'cleaning'   && typeof ModeCleaning   !== 'undefined') ModeCleaning.generalize();
+      else if (currentMode === 'armpose'    && typeof ModeArmpose    !== 'undefined') ModeArmpose.generalize();
     });
   }
 
-  // Reset button
+  // Reset button — delegates to current mode
   const btnReset = document.getElementById('btn-reset');
   if (btnReset) {
-    btnReset.addEventListener('click', function () {
-      if (typeof ModeReshelving !== 'undefined') {
-        ModeReshelving.reset();
-      } else if (typeof Scene !== 'undefined') {
-        Scene.resetScene();
-      }
+    btnReset.addEventListener('click', () => {
+      if      (currentMode === 'reshelving' && typeof ModeReshelving !== 'undefined') ModeReshelving.reset();
+      else if (currentMode === 'cleaning'   && typeof ModeCleaning   !== 'undefined') ModeCleaning.reset();
+      else if (currentMode === 'armpose'    && typeof ModeArmpose    !== 'undefined') ModeArmpose.reset();
     });
   }
 
-  // Mode tabs — visual switch; W4 will wire cleaning + armpose
-  document.querySelectorAll('.mode-tab').forEach(function (tab) {
-    tab.addEventListener('click', function (e) {
-      document.querySelectorAll('.mode-tab').forEach(function (t) {
-        t.classList.remove('active');
-      });
-      e.currentTarget.classList.add('active');
-
-      const mode = e.currentTarget.dataset.mode;
-      const badge = document.getElementById('mode-badge');
-      const modeLabels = {
-        reshelving: 'Mode 1: Reshelving',
-        cleaning:   'Mode 2: Cleaning',
-        armpose:    'Mode 3: Arm-pose',
-      };
-      if (badge) badge.textContent = modeLabels[mode] || mode;
-
-      if (typeof Scene !== 'undefined') Scene.loadScene(mode);
-
-      // W4 will replace this
-      if (mode !== 'reshelving') {
-        const pb = document.getElementById('panel-body');
-        if (pb) pb.innerHTML = '<p class="panel-placeholder">Coming in W4…</p>';
-        const btn = document.getElementById('btn-generalize');
-        if (btn) btn.disabled = true;
-      } else {
-        if (typeof ModeReshelving !== 'undefined') ModeReshelving.init();
-      }
+  // Mode tabs
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.addEventListener('click', e => {
+      switchMode(e.currentTarget.dataset.mode);
     });
   });
+
+  // Fallback GIF toggle
+  setupFallbackToggle();
 });

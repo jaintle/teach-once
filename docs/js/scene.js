@@ -17,6 +17,17 @@ const Scene = (() => {
   let idleRunning = false;
   let canvas;
 
+  // W4 — per-mode overlay objects (cleaned up on mode switch)
+  let _pathLine      = null;
+  let _trailLine     = null;
+  let _keypointGroup = null;
+  let _surfaceMesh   = null;
+  let _spillMesh          = null;   // canvas-texture spill for cleaning mode
+  let _spillCtx           = null;
+  let _spillTex           = null;
+  let _spillInitialPixels = 0;     // non-transparent pixel count at draw time
+  let _trailPoints   = [];
+
   // ---------------------------------------------------------------------------
   // Arm parameters (simplified Franka Panda, visual only)
   // ---------------------------------------------------------------------------
@@ -450,9 +461,240 @@ const Scene = (() => {
     console.log('teach-once scene loaded');
   }
 
+  // ---------------------------------------------------------------------------
+  // W4 — Mode-specific scene setup helpers
+  // ---------------------------------------------------------------------------
+
+  function _clearModeObjects() {
+    if (_pathLine)      { threeScene.remove(_pathLine);      _pathLine      = null; }
+    if (_trailLine)     { threeScene.remove(_trailLine);     _trailLine     = null; }
+    if (_keypointGroup) { threeScene.remove(_keypointGroup); _keypointGroup = null; }
+    if (_surfaceMesh)   { threeScene.remove(_surfaceMesh);   _surfaceMesh   = null; }
+    if (_spillMesh)     { threeScene.remove(_spillMesh);     _spillMesh     = null; }
+    _spillCtx = null;
+    _spillTex = null;
+    _trailPoints = [];
+  }
+
+  // Draw a brown coffee/juice splatter onto a 2D canvas context.
+  // type: 'scatter' (multi-blob), 'puddle' (central blob), 'line' (horizontal streak)
+  // Also counts non-transparent pixels so getSpillCoverage() can measure erasure.
+  function _drawSpill(ctx, type) {
+    ctx.clearRect(0, 0, 256, 256);
+
+    function blob(x, y, r) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0,   'rgba(160, 70, 10, 0.92)');
+      g.addColorStop(0.5, 'rgba(140, 55, 5,  0.75)');
+      g.addColorStop(1,   'rgba(120, 40, 0,  0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (type === 'puddle') {
+      // Single large central blob + a few satellites
+      blob(128, 128, 72);
+      blob(100, 108, 34);
+      blob(156, 150, 30);
+      blob(114, 158, 22);
+      blob(150,  98, 20);
+    } else if (type === 'line') {
+      // Horizontal streak at z=0 (canvas y=128): draw ellipse via scaled arc
+      // radiusX ≈ 85px (world Δx 0.166), radiusY ≈ 22px (world Δz 0.030)
+      ctx.save();
+      ctx.translate(128, 128);
+      ctx.scale(1, 0.28);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 88);
+      g.addColorStop(0,   'rgba(160, 70, 10, 0.95)');
+      g.addColorStop(0.55,'rgba(140, 55, 5,  0.78)');
+      g.addColorStop(1,   'rgba(120, 40, 0,  0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, 88, 0, Math.PI * 2);
+      ctx.fill();
+      // A second pass for a more ragged edge
+      ctx.scale(1, 1.6);
+      const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, 88);
+      g2.addColorStop(0,   'rgba(150, 65, 8, 0.60)');
+      g2.addColorStop(1,   'rgba(120, 40, 0, 0)');
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 88, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // scatter (default): multi-blob spread across table
+      blob(128, 128, 58);
+      blob( 88, 105, 36);
+      blob(162,  92, 32);
+      blob(152, 162, 42);
+      blob( 82, 158, 28);
+      blob(112,  72, 18);
+      blob(182, 142, 22);
+      blob( 65, 130, 16);
+      blob(175,  60, 14);
+    }
+
+    // Count opaque pixels for later coverage measurement
+    const d = ctx.getImageData(0, 0, 256, 256).data;
+    _spillInitialPixels = 0;
+    for (let i = 3; i < d.length; i += 4) {
+      if (d[i] > 10) _spillInitialPixels++;
+    }
+  }
+
+  // Returns fraction of the original spill that has been erased (0 = none, 1 = all).
+  // Called by mode_cleaning.js after playTrajectoryClean completes.
+  function getSpillCoverage() {
+    if (!_spillCtx || _spillInitialPixels === 0) return 0;
+    const d = _spillCtx.getImageData(0, 0, 256, 256).data;
+    let remaining = 0;
+    for (let i = 3; i < d.length; i += 4) {
+      if (d[i] > 10) remaining++;
+    }
+    return 1 - remaining / _spillInitialPixels;
+  }
+
+  // Shared deformation formula for surface + spill vertices.
+  // PlaneGeometry(0.5, 0.35) local: lx ∈ [-0.25, 0.25], ly ∈ [-0.175, 0.175]
+  // Returned lz deforms along local Z → world Y (height) after rotation.x = -PI/2
+  function _surfaceDeform(type, lx, ly) {
+    switch (type) {
+      case 'curved':
+        // Sinusoidal arch along X: peak at centre, ~7 cm tall
+        return 0.07 * Math.sin(Math.PI * (lx + 0.25) / 0.50);
+      case 'bumpy':
+        // Three Gaussian bumps
+        return 0.055 * Math.exp(-(lx * lx          + ly * ly)           / 0.018)
+             + 0.035 * Math.exp(-((lx - 0.14) ** 2 + (ly + 0.08) ** 2) / 0.010)
+             + 0.025 * Math.exp(-((lx + 0.13) ** 2 + (ly - 0.07) ** 2) / 0.008);
+      default:
+        return 0;   // flat / tilted — no vertex deformation
+    }
+  }
+
+  function _setupCleaningScene() {
+    if (objectMesh) objectMesh.visible = false;
+
+    // Both surface and spill use identical geometry spec so we can co-deform them.
+    // PlaneGeometry(0.5, 0.35) covers the full table cleaning area.
+    // Canvas UV: world x ∈ [0.25, 0.75] → u ∈ [0,1],  world z ∈ [-0.175, 0.175] → v ∈ [0,1]
+    const GW = 0.5, GH = 0.35, GSEG = 24;
+
+    const surfGeo = new THREE.PlaneGeometry(GW, GH, GSEG, GSEG);
+    const surfMat = new THREE.MeshStandardMaterial({
+      color: 0x88ccff,
+      transparent: true,
+      opacity: 0.82,
+      roughness: 0.6,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    _surfaceMesh = new THREE.Mesh(surfGeo, surfMat);
+    _surfaceMesh.rotation.x = -Math.PI / 2;
+    _surfaceMesh.position.set(0.5, 0.757, 0.0);
+    threeScene.add(_surfaceMesh);
+
+    // Spill mesh — same geometry, sits 4 mm above surface via vertex offset
+    const spillCanvas = document.createElement('canvas');
+    spillCanvas.width = spillCanvas.height = 256;
+    _spillCtx = spillCanvas.getContext('2d');
+    _drawSpill(_spillCtx, 'scatter');
+    _spillTex = new THREE.CanvasTexture(spillCanvas);
+
+    const spillGeo = new THREE.PlaneGeometry(GW, GH, GSEG, GSEG);
+    const spillMat = new THREE.MeshStandardMaterial({
+      map: _spillTex,
+      transparent: true,
+      depthWrite: false,
+      roughness: 0.9,
+      side: THREE.DoubleSide,
+    });
+    _spillMesh = new THREE.Mesh(spillGeo, spillMat);
+    _spillMesh.rotation.x = -Math.PI / 2;
+    _spillMesh.position.set(0.5, 0.757, 0.0);  // same base; offset in vertex Z
+    threeScene.add(_spillMesh);
+  }
+
+  function _setupArmPoseScene() {
+    if (objectMesh)  objectMesh.visible  = false;
+    if (shelfGroup)  shelfGroup.visible  = false;
+
+    _keypointGroup = new THREE.Group();
+
+    const KP_DEFS = [
+      { name: 'shoulder', pos: [0.38, 1.05, 0.00], color: 0x00eeff },
+      { name: 'elbow',    pos: [0.48, 0.95, 0.00], color: 0xff44aa },
+      { name: 'wrist',    pos: [0.58, 0.85, 0.00], color: 0xffdd00 },
+      { name: 'hand',     pos: [0.63, 0.78, 0.00], color: 0x4488ff },
+    ];
+
+    KP_DEFS.forEach(def => {
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.025, 16, 16),
+        new THREE.MeshStandardMaterial({
+          color: def.color,
+          emissive: def.color,
+          emissiveIntensity: 0.4,
+          transparent: true,
+          opacity: 0.9,
+        }),
+      );
+      sphere.position.set(...def.pos);
+      sphere.userData.isKeypoint = true;
+      sphere.userData.kpName = def.name;
+      _keypointGroup.add(sphere);
+    });
+
+    // Bone lines between consecutive keypoints
+    _updateBones({
+      shoulder: KP_DEFS[0].pos,
+      elbow:    KP_DEFS[1].pos,
+      wrist:    KP_DEFS[2].pos,
+      hand:     KP_DEFS[3].pos,
+    });
+
+    threeScene.add(_keypointGroup);
+  }
+
+  // Rebuild bone lines inside _keypointGroup
+  function _updateBones(keypoints) {
+    if (!_keypointGroup) return;
+    // Remove existing bone lines
+    const oldBones = _keypointGroup.children.filter(c => c.userData.isBone);
+    oldBones.forEach(b => _keypointGroup.remove(b));
+
+    const order = ['shoulder', 'elbow', 'wrist', 'hand'];
+    const boneMat = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.5, transparent: true });
+    for (let i = 0; i < order.length - 1; i++) {
+      const a = keypoints[order[i]];
+      const b = keypoints[order[i + 1]];
+      if (!a || !b) continue;
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a[0], a[1], a[2]),
+        new THREE.Vector3(b[0], b[1], b[2]),
+      ]);
+      const line = new THREE.Line(geo, boneMat);
+      line.userData.isBone = true;
+      _keypointGroup.add(line);
+    }
+  }
+
   function loadScene(task) {
-    // In W3/W4 this will reconfigure objects per task.
-    // For W2 the default reshelving layout is always shown.
+    resetScene();
+    _clearModeObjects();
+    // Ensure visibility restored after _clearModeObjects
+    if (objectMesh) objectMesh.visible = true;
+    if (shelfGroup) shelfGroup.visible = true;
+
+    if (task === 'cleaning') {
+      _setupCleaningScene();
+    } else if (task === 'armpose') {
+      _setupArmPoseScene();
+    }
+    // 'reshelving' uses base scene as-is
     console.log('Scene task:', task);
   }
 
@@ -656,6 +898,13 @@ const Scene = (() => {
     // Stop any running trajectory / idle loop first
     stopIdle();
 
+    // Clear W4 mode overlays
+    _clearModeObjects();
+
+    // Restore visibility for reshelving base scene
+    if (objectMesh) objectMesh.visible = true;
+    if (shelfGroup) shelfGroup.visible = true;
+
     // Reset arm, object, shelf
     setArmPose(HOME_ANGLES);
     if (objectMesh) objectMesh.position.set(0.5, 0.785, 0.0);
@@ -665,6 +914,13 @@ const Scene = (() => {
     if (eeSphere) {
       eeSphere.material.emissiveIntensity = 0.25;
       eeSphere.material.opacity = 0.80;
+    }
+
+    // Reset camera to initial position
+    if (camera) camera.position.set(1.4, 1.3, 0.8);
+    if (controls && controls.target) {
+      controls.target.set(0.35, 0.85, 0.0);
+      controls.update();
     }
 
     // Draw once immediately so the reset is visible right away
@@ -680,6 +936,202 @@ const Scene = (() => {
     if (renderer) renderer.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // W4 — New public methods
+  // ---------------------------------------------------------------------------
+
+  function drawPath(points, color = 0xff4444) {
+    if (_pathLine) { threeScene.remove(_pathLine); _pathLine = null; }
+    if (!points || points.length < 2) return;
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      points.map(p => new THREE.Vector3(p[0], p[1], p[2]))
+    );
+    _pathLine = new THREE.Line(geo,
+      new THREE.LineBasicMaterial({ color, linewidth: 2 }));
+    threeScene.add(_pathLine);
+  }
+
+  function clearPath() {
+    if (_pathLine)  { threeScene.remove(_pathLine);  _pathLine  = null; }
+    if (_trailLine) { threeScene.remove(_trailLine); _trailLine = null; }
+    _trailPoints = [];
+  }
+
+  function updateSurfaceMesh(config) {
+    if (!_surfaceMesh) return;
+
+    const type    = config.type || 'flat';
+    const tiltRad = (config.tilt || 0) * Math.PI / 180;
+
+    // Tilted: rotate the whole mesh. Curved/bumpy: deform vertices, keep rotation flat.
+    const rot = (type === 'tilted') ? -Math.PI / 2 + tiltRad : -Math.PI / 2;
+    _surfaceMesh.rotation.x = rot;
+
+    // Deform surface vertices
+    const sPos = _surfaceMesh.geometry.attributes.position;
+    for (let i = 0; i < sPos.count; i++) {
+      sPos.setZ(i, _surfaceDeform(type, sPos.getX(i), sPos.getY(i)));
+    }
+    sPos.needsUpdate = true;
+    _surfaceMesh.geometry.computeVertexNormals();
+
+    // Colour by surface type
+    const colors = { flat: 0x88ccff, tilted: 0x55ffaa, curved: 0xffcc55, bumpy: 0xcc88ff };
+    _surfaceMesh.material.color.set(colors[type] || 0x88ccff);
+    _surfaceMesh.material.opacity = (type === 'flat') ? 0.70 : 0.88;
+
+    // Co-deform spill mesh: same deformation + 4 mm local-Z offset so it sits above surface
+    if (_spillMesh) {
+      _spillMesh.rotation.x = rot;
+      const spPos = _spillMesh.geometry.attributes.position;
+      for (let i = 0; i < spPos.count; i++) {
+        spPos.setZ(i, _surfaceDeform(type, spPos.getX(i), spPos.getY(i)) + 0.004);
+      }
+      spPos.needsUpdate = true;
+      _spillMesh.geometry.computeVertexNormals();
+    }
+  }
+
+  function updateKeypointSpheres(keypoints) {
+    if (!_keypointGroup) return;
+    const order = ['shoulder', 'elbow', 'wrist', 'hand'];
+    const spheres = _keypointGroup.children.filter(c => c.userData.isKeypoint);
+    order.forEach((name, i) => {
+      if (spheres[i] && keypoints[name]) {
+        spheres[i].position.set(...keypoints[name]);
+      }
+    });
+    _updateBones(keypoints);
+    // Re-render immediately so sliders feel responsive
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
+  }
+
+  function flashKeypoint(index) {
+    if (!_keypointGroup) return;
+    const spheres = _keypointGroup.children.filter(c => c.userData.isKeypoint);
+    if (!spheres[index]) return;
+    const orig = spheres[index].material.color.getHex();
+    spheres[index].material.color.set(0xffffff);
+    spheres[index].material.emissiveIntensity = 1.0;
+    setTimeout(() => {
+      spheres[index].material.color.set(orig);
+      spheres[index].material.emissiveIntensity = 0.4;
+    }, 400);
+  }
+
+  async function playTrajectoryClean(positions, labels, dt = 45) {
+    stopIdle();
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 1.0;
+      eeSphere.material.opacity = 0.95;
+    }
+    let currentAngles = [...HOME_ANGLES];
+    _trailPoints = [];
+
+    for (let i = 0; i < positions.length; i++) {
+      const pos = positions[i];
+      const label = (labels && labels[i]) ? labels[i] : '';
+      const isStroke = label.startsWith('STROKE');
+
+      currentAngles = _solveIK(pos, currentAngles);
+      setArmPose(currentAngles);
+
+      // Trail and spill-erase only during stroke phases — not approach/retreat.
+      // This prevents ugly vertical red lines and erasing the canvas mid-air.
+      if (isStroke) {
+        _trailPoints.push(new THREE.Vector3(pos[0], pos[1], pos[2]));
+        if (_trailPoints.length > 2 && i % 5 === 0) {
+          if (_trailLine) threeScene.remove(_trailLine);
+          const geo = new THREE.BufferGeometry().setFromPoints(_trailPoints);
+          _trailLine = new THREE.Line(geo,
+            new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 }));
+          threeScene.add(_trailLine);
+        }
+
+        // Erase spill under EE — map world XZ → canvas UV.
+        // Spill mesh: PlaneGeometry(0.5, 0.35) centred at world (0.5, _, 0).
+        // World x ∈ [0.25, 0.75] → u ∈ [0,256],  world z ∈ [-0.175, 0.175] → v ∈ [0,256]
+        if (_spillCtx && _spillTex) {
+          const u = ((pos[0] - 0.25) / 0.50) * 256;
+          const v = ((pos[2] + 0.175) / 0.35) * 256;
+          _spillCtx.globalCompositeOperation = 'destination-out';
+          _spillCtx.fillStyle = 'rgba(0,0,0,1)';
+          _spillCtx.beginPath();
+          _spillCtx.arc(u, v, 26, 0, Math.PI * 2);
+          _spillCtx.fill();
+          _spillTex.needsUpdate = true;
+        }
+      }
+
+      const badge = document.getElementById('mode-badge');
+      if (badge && label) badge.textContent = 'Cleaning · ' + label;
+
+      controls.update();
+      renderer.render(threeScene, camera);
+      await new Promise(r => setTimeout(r, dt));
+    }
+
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 0.25;
+      eeSphere.material.opacity = 0.80;
+    }
+    setArmPose(HOME_ANGLES);
+    startIdle();
+  }
+
+  async function playTrajectoryArmpose(positions, labels, dt = 50) {
+    stopIdle();
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 1.0;
+      eeSphere.material.opacity = 0.95;
+    }
+    let currentAngles = [...HOME_ANGLES];
+    const kpMap = {
+      'shoulder ✓': 0, 'elbow ✓': 1,
+      'wrist ✓': 2,    'hand ✓': 3,
+    };
+
+    for (let i = 0; i < positions.length; i++) {
+      const pos = positions[i];
+      currentAngles = _solveIK(pos, currentAngles);
+      setArmPose(currentAngles);
+
+      const label = (labels && labels[i]) ? labels[i] : '';
+      const badge = document.getElementById('mode-badge');
+      if (badge && label) badge.textContent = 'Arm-pose · ' + label;
+
+      if (kpMap[label] !== undefined) {
+        flashKeypoint(kpMap[label]);
+      }
+
+      controls.update();
+      renderer.render(threeScene, camera);
+      await new Promise(r => setTimeout(r, dt));
+    }
+
+    if (eeSphere) {
+      eeSphere.material.emissiveIntensity = 0.25;
+      eeSphere.material.opacity = 0.80;
+    }
+    setArmPose(HOME_ANGLES);
+    startIdle();
+  }
+
+  // Redraw the spill canvas with a fresh mess of the given type.
+  // Resets _spillInitialPixels so getSpillCoverage() starts from 0 again.
+  // Also clears any existing trail drawn during a previous execution.
+  // Called by mode_cleaning when tilt slider moves or mess preset changes.
+  function resetSpillCanvas(type) {
+    if (!_spillCtx || !_spillTex) return;
+    // Clear trail from previous run
+    if (_trailLine) { threeScene.remove(_trailLine); _trailLine = null; }
+    _trailPoints = [];
+    // Redraw spill
+    _drawSpill(_spillCtx, type || 'scatter');
+    _spillTex.needsUpdate = true;
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
+  }
+
   return {
     init,
     loadScene,
@@ -690,7 +1142,17 @@ const Scene = (() => {
     playTrajectory,
     resetScene,
     dispose,
-    // expose for W3 inspection
+    // W4 additions
+    drawPath,
+    clearPath,
+    updateSurfaceMesh,
+    getSpillCoverage,
+    resetSpillCanvas,
+    updateKeypointSpheres,
+    flashKeypoint,
+    playTrajectoryClean,
+    playTrajectoryArmpose,
+    // expose for debugging
     get joints() { return joints; },
     get objectMesh() { return objectMesh; },
     get shelfGroup() { return shelfGroup; },

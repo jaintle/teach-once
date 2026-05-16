@@ -1135,3 +1135,94 @@ body.loaded .hero__scroll-hint {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+/* =============================================================================
+   W4 — Mode 2 cleaning, Mode 3 armpose, GIF fallback controls
+   ============================================================================= */
+
+/* Surface type selector (cleaning mode) */
+.surface-selector {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.surface-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.surface-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0a0a0f;
+  font-weight: 600;
+}
+
+.surface-btn:not(.active):hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* Keypoint controls (armpose mode) */
+.keypoint-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.keypoint-group {
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+}
+
+.keypoint-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.keypoint-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.keypoint-name {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Canvas hint bar — bottom overlay inside canvas-wrapper */
+.canvas-hint-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px var(--space-md);
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.canvas-hint {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
