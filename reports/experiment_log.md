@@ -1446,3 +1446,54 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 - Three.js canvas (W2)
 - Interactive GP modes (W3/W4)
 - Actual algorithm figures (W5)
+
+---
+
+## Phase W2 — Three.js Scene: Franka Arm, Table, Shelf, Lighting
+
+**Date:** 2026-05-16
+**Paper section(s) / Website section:** W2 — 3D interactive scene
+
+**Files added/changed:**
+- `docs/js/scene.js` — replaced stub with full Three.js scene (~490 lines)
+- `docs/css/style.css` — appended W2 demo section CSS (~170 lines)
+- `docs/index.html` — replaced demo placeholder with canvas+panel layout; updated script loading order
+
+**What works:**
+- Three.js WebGLRenderer with ACESFilmic tone mapping, PCFSoft shadows, sRGB encoding
+- Checker-pattern floor via CanvasTexture (dark #111118/#1a1a28)
+- Dark back + left walls (subtle #0d0d1a)
+- Dark walnut table (0.6×0.75×0.4m) with four legs at x=0.5 world
+- Natural wood shelf with two planks, two vertical supports, green emissive goal slot at (0.5, 0.9, -0.7)
+- Orange box (0.07m) with slight emissive at table surface y=0.785
+- 7-joint Franka arm built from CylinderGeometry + SphereGeometry (r128 safe, no CapsuleGeometry)
+  - HOME_ANGLES = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
+  - Hierarchical Object3D FK chain — each joint is a pivot group
+  - Joint axes alternating Y/Z per simplified Franka convention
+- Cyan EE sphere (emissive 0x00d4ff) + PointLight at EE for glow
+- 3-light rig: warm key (DirectionalLight, shadows), cool blue fill, cyan rim
+- FogExp2 for depth atmosphere
+- OrbitControls: damping, distance limits [0.5, 4], no underground
+- Idle animation: joints 1,3,5 oscillate gently (breathing effect), box hover
+- Canvas sized from wrapper clientWidth at init + ResizeObserver on window resize
+- Control panel: mode tabs (3), metrics placeholders, disabled Generalize button, Reset button
+- Mode tab click → updates badge text + calls Scene.loadScene()
+- Reset button → Scene.resetScene()
+- noscript GIF fallback + JS error handler for Three.js CDN failure
+- Scripts loaded synchronously (no defer) in correct order: three.js → OrbitControls → scene.js → gp_infer.js → ui.js
+
+**What was tricky:**
+- CapsuleGeometry not available in r128; used CylinderGeometry + joint spheres instead (CLAUDE.md constraint).
+- Script loading order: Three.js CDN must be synchronous (no defer) so THREE is defined before scene.js runs; moved CDN tags to bottom of body.
+- Canvas sizing: CSS aspect-ratio:16/9 on wrapper doesn't give canvas pixel dimensions at init time; computed w from parentElement.clientWidth and derived h=w*9/16.
+- Coordinate conversion: MuJoCo is Z-up, Three.js is Y-up; scene positions converted (MuJoCo z→Three.js y, MuJoCo y→Three.js -z).
+
+**Math/equation references implemented:** None (W2 is visual geometry only)
+
+**Numerical sanity checks passed:** N/A
+
+**Open questions / deferred work:**
+- Exact Franka DH FK (W3 adds drag interaction so approximate visual FK is sufficient)
+- Interactive drag (W3)
+- GP inference wired to scene (W3)
+- Cleaning path draw + arm-pose drag (W4)

@@ -20,8 +20,8 @@
   <!-- Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- Three.js CDN — used in W2 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+  <!-- Three.js CDN — r128 (no defer: must be defined before scene.js) -->
+  <!-- loaded at bottom of body to avoid blocking render -->
 </head>
 <body>
 
@@ -141,18 +141,72 @@
   </section>
 
   <!-- =====================================================================
-       DEMO  (Three.js canvas injected in W2)
+       DEMO — Three.js scene (W2) + control panel (W3)
        ===================================================================== -->
-  <section id="demo" class="demo">
-    <div class="container">
-
+  <section id="demo">
+    <div style="padding: var(--space-lg) var(--space-lg) var(--space-sm);">
       <p class="section-label">Interactive demo</p>
       <h2 style="margin-bottom: var(--space-lg);">Try it yourself</h2>
+    </div>
 
-      <!-- Three.js canvas injected in W2 -->
-      <div class="demo__placeholder" id="demo-canvas-root">
-        <span class="demo__placeholder-badge">Coming in W2</span>
-        <p class="demo__placeholder-label">Three.js interactive scene loading in W2…</p>
+    <div class="demo-container" style="padding: 0 var(--space-lg) var(--space-xl);">
+
+      <!-- Left: 3D canvas -->
+      <div class="canvas-wrapper">
+        <canvas id="robot-canvas"></canvas>
+
+        <div class="canvas-overlay">
+          <span class="mode-badge" id="mode-badge">Mode 1: Reshelving</span>
+          <span class="render-info" id="render-info">Three.js · TP-GPT inference</span>
+        </div>
+
+        <!-- GIF fallback: shown only if JS is disabled -->
+        <noscript>
+          <img src="assets/gifs/final_highlight.gif"
+               style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;"
+               alt="TP-GPT demo">
+        </noscript>
+      </div>
+
+      <!-- Right: control panel -->
+      <div class="control-panel" id="control-panel">
+        <div class="panel-header">
+          <h3>Configure the scene</h3>
+          <p>Drag objects to new positions,<br>then click Generalize.</p>
+        </div>
+
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-mode="reshelving">Reshelving</button>
+          <button class="mode-tab"        data-mode="cleaning">Cleaning</button>
+          <button class="mode-tab"        data-mode="armpose">Arm-pose</button>
+        </div>
+
+        <div class="panel-body" id="panel-body">
+          <!-- Mode-specific controls injected by W3/W4 -->
+          <p class="panel-placeholder">Interactive controls loading in W3…</p>
+        </div>
+
+        <div class="metrics-panel" id="metrics-panel">
+          <div class="metric">
+            <span class="metric-label">Transport σ</span>
+            <span class="metric-value" id="metric-sigma">—</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">EE error</span>
+            <span class="metric-value" id="metric-error">—</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">GP confidence</span>
+            <span class="metric-value" id="metric-conf">—</span>
+          </div>
+        </div>
+
+        <button class="btn-generalize" id="btn-generalize" disabled>
+          Generalize TP-GPT →
+        </button>
+        <button class="btn-reset" id="btn-reset">
+          Reset to demo
+        </button>
       </div>
 
     </div>
@@ -260,11 +314,29 @@
   </footer>
 
   <!-- =====================================================================
-       SCRIPTS
+       SCRIPTS — loaded synchronously at bottom of body
+       Order matters: three.js → OrbitControls → scene.js → gp_infer.js → ui.js
        ===================================================================== -->
-  <script src="js/gp_infer.js" defer></script>
-  <script src="js/scene.js"    defer></script>
-  <script src="js/ui.js"       defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/gp_infer.js"></script>
+  <script src="js/ui.js"></script>
+
+  <!-- Three.js load error → show GIF fallback -->
+  <script>
+    window.addEventListener('error', function (e) {
+      if (e.target && e.target.src && e.target.src.includes('three')) {
+        var wrapper = document.querySelector('.canvas-wrapper');
+        if (wrapper) {
+          wrapper.innerHTML =
+            '<img src="assets/gifs/final_highlight.gif"' +
+            ' style="width:100%;height:100%;object-fit:cover;"' +
+            ' alt="TP-GPT demo (fallback)">';
+        }
+      }
+    }, true);
+  </script>
 
   <script>
     // -------------------------------------------------------------------------
@@ -274,6 +346,11 @@
       requestAnimationFrame(function () {
         document.body.classList.add('loaded');
       });
+      // Initialize Three.js scene
+      if (typeof Scene !== 'undefined') {
+        Scene.init('robot-canvas');
+        Scene.loadScene('reshelving');
+      }
     });
 
     // -------------------------------------------------------------------------
@@ -328,6 +405,37 @@
         card.style.setProperty('--mouse-y', y);
       });
     });
+
+    // -------------------------------------------------------------------------
+    // Mode tabs — visual switch (logic wired in W3/W4)
+    // -------------------------------------------------------------------------
+    document.querySelectorAll('.mode-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('.mode-tab').forEach(function (t) {
+          t.classList.remove('active');
+        });
+        tab.classList.add('active');
+        var mode = tab.dataset.mode;
+        var badge = document.getElementById('mode-badge');
+        var labels = {
+          reshelving: 'Mode 1: Reshelving',
+          cleaning:   'Mode 2: Cleaning',
+          armpose:    'Mode 3: Arm-pose',
+        };
+        if (badge) badge.textContent = labels[mode] || mode;
+        if (typeof Scene !== 'undefined') Scene.loadScene(mode);
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Reset button
+    // -------------------------------------------------------------------------
+    var resetBtn = document.getElementById('btn-reset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        if (typeof Scene !== 'undefined') Scene.resetScene();
+      });
+    }
   </script>
 
 </body>
