@@ -1497,3 +1497,61 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 - Interactive drag (W3)
 - GP inference wired to scene (W3)
 - Cleaning path draw + arm-pose drag (W4)
+
+---
+
+## Phase W3 — Mode 1 Interactive: Drag Reshelving + JS TP-GPT
+
+**Date:** 2026-05-16
+**Paper section(s) / Website section:** W3 — Mode 1, Eqs. (2),(3),(7),(9)-(13)
+
+**Files added/changed:**
+- `docs/js/gp_infer.js` — full TP-GPT inference pipeline (617 lines)
+- `docs/js/mode_reshelving.js` — Mode 1 slider UI + generalize flow (295 lines, new)
+- `docs/js/scene.js` — added eeWorldMarker, _visualIKApprox, replaced playTrajectory (578 lines)
+- `docs/js/ui.js` — wired generalize/reset buttons, mode tab switching
+- `docs/css/style.css` — slider controls CSS appended
+- `docs/index.html` — added mode_reshelving.js to script loading order
+
+**What works:**
+- Mat utilities: zeros, mul, T, mulVec, dot, add, sub, scale, norm, addRidge, eye, det3, inv (Gauss-Jordan with partial pivoting), jacobiEigen (Jacobi method), svd (via eigendecomposition of A^T A)
+- RBF kernel: k(xi,xj) = sigmaP² exp(-||xi-xj||²/(2l²))
+- GPRegressor: Eq.(2) mean = K(X*,X) @ alpha, Eq.(3) var = k_self - diag(Ks K^-1 Ks^T)
+- MultiOutputGP: one GPRegressor per output dimension
+- LinearTransport: Kabsch algorithm, Eqs.(8)-(11), reflection fix via det3
+- NonlinearResidual: GP on γ(S)→T-γ(S) residual (Eq.12)
+- TPGPTTransport: Eq.(7) φ(x)=γ(x)+ψ(γ(x)), Eq.(13) velocity transport via finite differences, getUncertainty from residual GP std
+- DEMO_DATA: 8 keypoints (4 box + 4 shelf corners) + 6-phase trajectory in Three.js Y-up coords
+- buildTargetKeypoints(bx, bz, sheight, sdepth) → 8 target keypoints
+- Self-test: identity transport err<0.05, translation transport err<0.05, full pipeline
+- Mode 1 sliders: Box X (0.25-0.75), Box Z depth (-0.20-0.20), Shelf height (0.78-1.10), Shelf depth (-0.90 to -0.50)
+- Sliders update 3D scene live (Scene.setObjectPos / Scene.setShelfPos)
+- Transport preview runs on every slider change (full TPGPTTransport fit)
+- Generalize button: enabled on first slider move, shows Computing→Executing
+- playTrajectory: eeWorldMarker moves through trajectory in world space, arm does visual IK approximation (_visualIKApprox using joints 0/1/3), box follows EE during CARRY+PLACE phase
+- Metrics: Transport σ (mean std), EE error (m, color-coded green/orange/red), GP confidence (%)
+- Reset: sliders → default, 3D scene resets, button re-disabled
+
+**What was tricky:**
+- SVD in pure JS: implemented via Jacobi eigendecomposition of A^T A, then U = AV/S. Order is sorted descending by eigenvalue. Reflection fix using det3.
+- Coordinate system: Three.js Y-up (x, height-y, depth-z) used consistently throughout DEMO_DATA, buildTargetKeypoints, and playTrajectory. Slider "depth" maps to Three.js z (negative = back wall).
+- World-space EE marker: eeSphere is in joints[6]'s local frame so not directly settable to world pos. Added separate eeWorldMarker mesh in scene root; shown during playTrajectory, hidden during idle.
+- Script order check in self-test was confused by order comment in HTML containing 'ui.js' before actual script tag. Verified correct with anchored search.
+
+**Math/equation references implemented:**
+- Eq.(2): GP posterior mean
+- Eq.(3): GP posterior variance
+- Eq.(7): φ(x) = γ(x) + ψ(γ(x)) — full transport map
+- Eqs.(8)-(11): Kabsch SVD linear transport
+- Eq.(12): nonlinear residual GP
+- Eq.(13): velocity transport via finite-difference Jacobian
+
+**Numerical sanity checks passed:**
+- Test 1: identity transport error < 0.05 (all 3 components)
+- Test 2: translation transport X and Y errors < 0.05
+- Test 3: full demo pipeline, 6 waypoints returned
+
+**Open questions / deferred work:**
+- Cleaning path draw (W4)
+- Arm-pose drag (W4)
+- Actual robot figures in How It Works (W5)

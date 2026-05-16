@@ -12,6 +12,7 @@ const Scene = (() => {
   // ---------------------------------------------------------------------------
   let renderer, camera, threeScene, controls;
   let armGroup, tableGroup, shelfGroup, objectMesh, eeSphere;
+  let eeWorldMarker = null;  // world-space sphere used during playTrajectory
   let joints = [];           // 7 THREE.Group pivot points
   let animationId = null;
   let idleRunning = false;
@@ -257,6 +258,22 @@ const Scene = (() => {
     const eeLight = new THREE.PointLight(0x00d4ff, 0.5, 0.4);
     eeSphere.add(eeLight);
 
+    // World-space EE trajectory marker — shown during playTrajectory
+    eeWorldMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 16, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0x00d4ff,
+        emissive: 0x00d4ff,
+        emissiveIntensity: 1.5,
+        transparent: true,
+        opacity: 0.88,
+      }),
+    );
+    eeWorldMarker.visible = false;
+    const eeWorldLight = new THREE.PointLight(0x00d4ff, 0.8, 0.6);
+    eeWorldMarker.add(eeWorldLight);
+    threeScene.add(eeWorldMarker);
+
     // Arm base sits on the table surface (world y=0.75)
     armGroup.position.set(0.0, 0.75, 0.0);
     threeScene.add(armGroup);
@@ -296,7 +313,9 @@ const Scene = (() => {
   // ---------------------------------------------------------------------------
 
   function setArmPose(angles) {
-    for (let i = 0; i < Math.min(7, angles.length); i++) {
+    if (!joints || joints.length === 0) return;
+    for (let i = 0; i < Math.min(7, angles.length, joints.length); i++) {
+      if (!joints[i]) continue;
       const ax = JOINT_AXES[i];
       if (ax === 'y') {
         joints[i].rotation.y = angles[i];
@@ -315,7 +334,7 @@ const Scene = (() => {
   let _idleT0 = 0;
 
   function idleTick(ts) {
-    if (!idleRunning) return;
+    if (!idleRunning || !renderer || !threeScene || !camera) return;
     const t = ts * 0.001;
     const angles = [...HOME_ANGLES];
     angles[1] += Math.sin(t * 0.45) * 0.05;
@@ -394,17 +413,24 @@ const Scene = (() => {
     // Spec positions converted to Three.js Y-up:
     // MuJoCo (1.4, -0.8, 1.3) → Three.js (1.4, 1.3, 0.8)
     camera.position.set(1.4, 1.3, 0.8);
+    // Always set lookAt so the scene renders correctly even if OrbitControls fails
+    camera.lookAt(0.35, 0.85, 0.0);
 
-    // OrbitControls
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.35, 0.85, 0.0);
-    controls.minDistance = 0.5;
-    controls.maxDistance = 4.0;
-    controls.maxPolarAngle = Math.PI * 0.85;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enablePan = false;
-    controls.update();
+    // OrbitControls — graceful fallback if CDN misses
+    try {
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0.35, 0.85, 0.0);
+      controls.minDistance = 0.5;
+      controls.maxDistance = 4.0;
+      controls.maxPolarAngle = Math.PI * 0.85;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.enablePan = false;
+      controls.update();
+    } catch (e) {
+      console.warn('[scene] OrbitControls unavailable:', e.message);
+      controls = { update: () => {}, target: new THREE.Vector3(0.35, 0.85, 0) };
+    }
 
     // Build scene
     buildLighting();
@@ -420,6 +446,9 @@ const Scene = (() => {
 
     // Resize handler
     window.addEventListener('resize', onResize);
+
+    // Draw one frame immediately so canvas is never black during first load
+    renderer.render(threeScene, camera);
 
     // Start idle
     startIdle();
@@ -448,20 +477,106 @@ const Scene = (() => {
     }
   }
 
-  async function playTrajectory(positions, dt = 50) {
+  // ---------------------------------------------------------------------------
+  // Visual IK approximation — makes the arm reach toward a world-space target
+  // Not mathematically exact; purely cosmetic for browser demo
+  // ---------------------------------------------------------------------------
+  function _visualIKApprox(target) {
+    if (!joints || joints.length < 7 || !armGroup) return;
+    const [tx, ty, tz] = target;
+
+    // Horizontal offset from arm base (armGroup at world y=0.75, x=0, z=0)
+    const dx = tx; // arm base at x=0
+    const dz = tz; // arm base at z=0
+    const dy = ty - 0.75; // vertical above mount
+
+    // Joint 0 (Y rotation): yaw arm to face target in XZ plane
+    // When rot.y=0, arm's reach is along +X after shoulder pitch
+    joints[0].rotation.y = Math.atan2(-dz, Math.max(0.01, dx));
+
+    // Joint 1 (Z rotation, shoulder pitch): blend toward target height+distance
+    const horizDist = Math.sqrt(dx * dx + dz * dz);
+    const targetPitch = -Math.atan2(dy, Math.max(0.15, horizDist) * 0.85);
+    joints[1].rotation.z = HOME_ANGLES[1] * 0.35 + targetPitch * 0.65;
+    joints[1].rotation.y = 0;
+
+    // Joint 3 (Z rotation, elbow): extend/contract based on reach distance
+    const reach = Math.sqrt(dx * dx + dz * dz + dy * dy);
+    joints[3].rotation.z = HOME_ANGLES[3] + Math.min(1.4, reach * 0.8) * 0.45;
+    joints[3].rotation.y = 0;
+
+    // Keep remaining joints near home
+    joints[2].rotation.y = HOME_ANGLES[2];  joints[2].rotation.z = 0;
+    joints[4].rotation.y = HOME_ANGLES[4];  joints[4].rotation.z = 0;
+    joints[5].rotation.z = HOME_ANGLES[5];  joints[5].rotation.y = 0;
+    joints[6].rotation.y = HOME_ANGLES[6];  joints[6].rotation.z = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Trajectory playback — W3
+  // positions: (N, 3) world-space EE positions (Three.js Y-up)
+  // phaseLabels: (N,) string label per frame
+  // ---------------------------------------------------------------------------
+  async function playTrajectory(positions, phaseLabels, dt = 50) {
     stopIdle();
-    for (const pos of positions) {
-      if (eeSphere) eeSphere.position.set(0, 0, 0);  // placeholder
+    const badge = document.getElementById('mode-badge');
+
+    // Show world-space EE marker, dim arm's own EE sphere
+    if (eeWorldMarker) eeWorldMarker.visible = true;
+    if (eeSphere) eeSphere.visible = false;
+
+    // Remember original box y (table surface)
+    const origBoxY = objectMesh ? objectMesh.position.y : 0.785;
+
+    for (let i = 0; i < positions.length; i++) {
+      const pos = positions[i];
+      const label = (phaseLabels && phaseLabels[i]) || '';
+
+      // Update world-space EE marker
+      if (eeWorldMarker) eeWorldMarker.position.set(pos[0], pos[1], pos[2]);
+
+      // Approximate visual IK
+      _visualIKApprox(pos);
+
+      // Update mode badge
+      if (badge && label) badge.textContent = 'Reshelving · ' + label;
+
+      // Box follows EE during CARRY and PLACE
+      if (objectMesh && (label === 'CARRY' || label === 'PLACE')) {
+        objectMesh.position.set(pos[0], pos[1] - 0.045, pos[2]);
+      }
+
+      controls.update();
       renderer.render(threeScene, camera);
       await new Promise((r) => setTimeout(r, dt));
     }
+
+    // Restore
+    if (eeWorldMarker) eeWorldMarker.visible = false;
+    if (eeSphere) eeSphere.visible = true;
+
+    setArmPose(HOME_ANGLES);
     startIdle();
   }
 
   function resetScene() {
+    // Stop any running trajectory / idle loop first
+    stopIdle();
+
+    // Reset arm, object, shelf
     setArmPose(HOME_ANGLES);
     if (objectMesh) objectMesh.position.set(0.5, 0.785, 0.0);
     if (shelfGroup) shelfGroup.position.set(0.5, 0.9, -0.7);
+
+    // Restore EE marker visibility (may have been left visible by interrupted trajectory)
+    if (eeWorldMarker) eeWorldMarker.visible = false;
+    if (eeSphere) eeSphere.visible = true;
+
+    // Draw once immediately so the reset is visible right away
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
+
+    // Restart idle animation
+    startIdle();
   }
 
   function dispose() {
