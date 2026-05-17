@@ -87,7 +87,7 @@ function setupFallbackToggle() {
 // DOMContentLoaded — wire everything
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('teach-once UI loaded (W4)');
+  console.log('teach-once UI loaded (W5)');
 
   // Default mode init
   if (typeof ModeReshelving !== 'undefined') {
@@ -123,4 +123,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fallback GIF toggle
   setupFallbackToggle();
+
+  // ---------------------------------------------------------------------------
+  // W5 — Scroll-triggered step card animations
+  // ---------------------------------------------------------------------------
+  (function initScrollAnimations() {
+    const cards = document.querySelectorAll('#how-it-works .step-card');
+    if (!cards.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12 });
+    cards.forEach(card => observer.observe(card));
+  })();
+
+  // ---------------------------------------------------------------------------
+  // W5 — BibTeX copy button
+  // ---------------------------------------------------------------------------
+  const bibBtn = document.getElementById('btn-copy-bib');
+  if (bibBtn) {
+    bibBtn.addEventListener('click', () => {
+      const code = document.querySelector('.bibtex-code');
+      if (!code) return;
+      navigator.clipboard.writeText(code.textContent)
+        .then(() => {
+          bibBtn.textContent = 'Copied ✓';
+          setTimeout(() => { bibBtn.textContent = 'Copy'; }, 2000);
+        })
+        .catch(() => {
+          bibBtn.textContent = 'Failed';
+          setTimeout(() => { bibBtn.textContent = 'Copy'; }, 2000);
+        });
+    });
+  }
 });

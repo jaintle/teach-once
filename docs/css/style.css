@@ -1226,3 +1226,508 @@ body.loaded .hero__scroll-hint {
   font-size: 0.7rem;
   color: var(--text-dim);
 }
+
+/* =============================================================================
+   W5 — HOW IT WORKS (rebuilt)
+   ============================================================================= */
+
+#how-it-works {
+  padding: var(--space-2xl) var(--space-lg);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--bg-tertiary);
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.section-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.section-heading {
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 0 0 var(--space-sm) 0;
+  color: var(--text-primary);
+}
+
+.section-subtext {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: var(--space-xl);
+  max-width: 620px;
+  line-height: 1.6;
+}
+
+.section-subtext a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.section-subtext a:hover { text-decoration: underline; }
+
+/* Step cards grid */
+.steps-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+/* Override old .step-card rule — W5 card is a row layout */
+#how-it-works .step-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  gap: var(--space-md);
+  flex-direction: row;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#how-it-works .step-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#how-it-works .step-card:nth-child(2) { transition-delay: 0.10s; }
+#how-it-works .step-card:nth-child(3) { transition-delay: 0.20s; }
+#how-it-works .step-card:nth-child(4) { transition-delay: 0.30s; }
+
+.step-number {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  line-height: 1;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.step-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-sm) 0;
+  color: var(--text-primary);
+}
+
+.step-content p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.step-equation {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  margin-bottom: var(--space-sm);
+  display: inline-block;
+}
+
+.step-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-sm);
+}
+
+.step-figure img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-tertiary);
+  background: var(--bg-secondary);
+}
+
+.fig-caption {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* Wide figure (Fig. 7) */
+.wide-figure {
+  border-top: 1px solid var(--bg-tertiary);
+  padding-top: var(--space-lg);
+}
+
+.wide-figure h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.wide-figure p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  max-width: 700px;
+  margin-bottom: var(--space-md);
+  line-height: 1.6;
+}
+
+.wide-img {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--bg-tertiary);
+  margin-bottom: 8px;
+}
+
+/* =============================================================================
+   W5 — RESULTS SECTION (rebuilt)
+   ============================================================================= */
+
+#results {
+  padding: var(--space-2xl) var(--space-lg);
+}
+
+.results-table-wrapper {
+  margin-bottom: var(--space-xl);
+}
+
+.results-table-wrapper h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.table-caption {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+}
+
+.table-scroll { overflow-x: auto; }
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  min-width: 500px;
+}
+
+.results-table th {
+  text-align: left;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.70rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.results-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.results-table tr:last-child td { border-bottom: none; }
+
+.highlight-row td {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.highlight-row td:first-child {
+  border-left: 3px solid var(--accent);
+}
+
+.type-analytical {
+  color: var(--success);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.type-estimated {
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.type-none {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.results-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.result-fig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.result-fig h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.result-fig img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-tertiary);
+}
+
+.limitations-note {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.limitations-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.limitations-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.limitations-note a:hover { text-decoration: underline; }
+
+/* =============================================================================
+   W5 — PAPER & CITATION SECTION
+   ============================================================================= */
+
+#paper {
+  padding: var(--space-2xl) var(--space-lg);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--bg-tertiary);
+}
+
+.paper-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.paper-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.paper-card-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--accent);
+}
+
+.paper-card h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.paper-authors {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.btn-outline {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.btn-outline:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.bibtex-block {
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.bibtex-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bg-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.btn-tertiary {
+  background: none;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-tertiary:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.bibtex-code {
+  margin: 0;
+  padding: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* =============================================================================
+   W5 — FOOTER (rebuilt)
+   ============================================================================= */
+
+footer {
+  border-top: 1px solid var(--bg-tertiary);
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--bg-primary);
+}
+
+.footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.footer-wordmark {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-weight: 600;
+  display: block;
+  margin-bottom: var(--space-sm);
+}
+
+.footer-tagline {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.footer-links-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.footer-links-col a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s;
+}
+
+.footer-links-col a:hover { color: var(--accent); }
+
+.footer-credits p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0 0 4px 0;
+}
+
+.footer-credits a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.footer-dim {
+  color: var(--text-dim) !important;
+  font-family: var(--font-mono);
+  font-size: 0.70rem !important;
+  margin-top: var(--space-sm) !important;
+}
+
+/* =============================================================================
+   W5 — GLOBAL POLISH
+   ============================================================================= */
+
+/* Scroll margin so sticky nav doesn't hide section headings */
+section {
+  scroll-margin-top: 60px;
+}
+
+/* Reduced motion: disable scroll-in animations */
+@media (prefers-reduced-motion: reduce) {
+  #how-it-works .step-card {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .steps-grid         { grid-template-columns: 1fr; }
+  #how-it-works .step-card { flex-direction: column; }
+  .results-figures    { grid-template-columns: 1fr; }
+  .paper-grid         { grid-template-columns: 1fr; }
+  .footer-inner       { grid-template-columns: 1fr; gap: var(--space-lg); }
+  .section-heading    { font-size: 1.6rem; }
+}

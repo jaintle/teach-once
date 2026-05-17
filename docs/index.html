@@ -4,13 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>teach-once — TP-GPT Demo</title>
-  <meta name="description" content="Interactive demo of TP-GPT: show a robot a task once, it generalizes everywhere.">
+
+  <!-- Primary meta -->
+  <meta name="description"
+        content="Interactive TP-GPT demo: show a robot a task once, it generalizes everywhere. Full reproduction of Franzese et al. 2024.">
+  <meta name="author" content="Abhinav Jain">
+  <meta name="keywords"
+        content="TP-GPT, Gaussian Process Transportation, robot learning, imitation learning, policy generalization">
 
   <!-- Open Graph -->
-  <meta property="og:title"       content="teach-once — TP-GPT Demo">
-  <meta property="og:description" content="Interactive demo of TP-GPT: show a robot a task once, it generalizes everywhere.">
-  <meta property="og:image"       content="assets/gifs/final_highlight.gif">
+  <meta property="og:title"       content="teach-once — TP-GPT Interactive Demo">
+  <meta property="og:description" content="Show a robot a task once. TP-GPT generalizes it everywhere. Interactive demo + full paper reproduction.">
   <meta property="og:type"        content="website">
+  <meta property="og:url"         content="https://jaintle.github.io/teach-once/">
+  <meta property="og:image"       content="https://jaintle.github.io/teach-once/assets/gifs/final_highlight.gif">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card"        content="summary_large_image">
+  <meta name="twitter:title"       content="teach-once — TP-GPT Interactive Demo">
+  <meta name="twitter:description" content="Show a robot a task once. TP-GPT generalizes it everywhere.">
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://jaintle.github.io/teach-once/">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,9 +37,6 @@
 
   <!-- Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
-
-  <!-- Three.js CDN — r128 (no defer: must be defined before scene.js) -->
-  <!-- loaded at bottom of body to avoid blocking render -->
 </head>
 <body>
 
@@ -34,10 +49,13 @@
       <ul class="nav__links">
         <li><a href="#demo"          data-nav>Demo</a></li>
         <li><a href="#how-it-works"  data-nav>How it works</a></li>
+        <li><a href="#results"       data-nav>Results</a></li>
         <li><a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Paper</a></li>
       </ul>
     </div>
   </nav>
+
+  <main>
 
   <!-- =====================================================================
        HERO
@@ -90,6 +108,7 @@
             src="assets/gifs/final_reshelving.gif"
             alt="TP-GPT reshelving: pick-and-place adapts to new object and goal positions"
             loading="lazy"
+            width="400" height="300"
           >
           <p class="task-card__desc">
             TP-GPT transports pick-place policy to new object/goal positions
@@ -103,6 +122,7 @@
             src="assets/gifs/final_cleaning.gif"
             alt="TP-GPT cleaning: wipe path morphs to shifted surface"
             loading="lazy"
+            width="400" height="300"
           >
           <p class="task-card__desc">
             TP-GPT adapts cleaning path to shifted surface
@@ -116,6 +136,7 @@
             src="assets/gifs/final_armpose.gif"
             alt="TP-GPT arm-pose: traces path through new arm configuration"
             loading="lazy"
+            width="400" height="300"
           >
           <p class="task-card__desc">
             TP-GPT traces path through new arm configuration
@@ -129,8 +150,9 @@
         <img
           class="highlight__reel"
           src="assets/gifs/final_highlight.gif"
-          alt="TP-GPT highlight reel: all three tasks"
+          alt="TP-GPT highlight reel: all three tasks generalizing from single demonstrations"
           loading="lazy"
+          width="1200" height="450"
         >
         <p class="highlight__caption">
           Three tasks · Single demonstration each · Franka Panda arm · MuJoCo kinematic simulation
@@ -141,7 +163,7 @@
   </section>
 
   <!-- =====================================================================
-       DEMO — Three.js scene (W2) + control panel (W3)
+       DEMO — Three.js scene + control panel
        ===================================================================== -->
   <section id="demo">
     <div style="padding: var(--space-lg) var(--space-lg) var(--space-sm);">
@@ -153,7 +175,9 @@
 
       <!-- Left: 3D canvas -->
       <div class="canvas-wrapper">
-        <canvas id="robot-canvas"></canvas>
+        <canvas id="robot-canvas"
+                role="img"
+                aria-label="Interactive 3D robot simulation — use the control panel on the right to configure the scene"></canvas>
 
         <div class="canvas-overlay">
           <span class="mode-badge" id="mode-badge">Mode 1: Reshelving</span>
@@ -169,7 +193,7 @@
         <noscript>
           <img src="assets/gifs/final_highlight.gif"
                style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;"
-               alt="TP-GPT demo">
+               alt="TP-GPT demo (static fallback — enable JavaScript for the interactive version)">
         </noscript>
       </div>
 
@@ -180,15 +204,14 @@
           <p>Drag objects to new positions,<br>then click Generalize.</p>
         </div>
 
-        <div class="mode-tabs">
-          <button class="mode-tab active" data-mode="reshelving">Reshelving</button>
-          <button class="mode-tab"        data-mode="cleaning">Cleaning</button>
-          <button class="mode-tab"        data-mode="armpose">Arm-pose</button>
+        <div class="mode-tabs" role="tablist" aria-label="Task modes">
+          <button class="mode-tab active" data-mode="reshelving" role="tab" aria-selected="true">Reshelving</button>
+          <button class="mode-tab"        data-mode="cleaning"   role="tab" aria-selected="false">Cleaning</button>
+          <button class="mode-tab"        data-mode="armpose"    role="tab" aria-selected="false">Arm-pose</button>
         </div>
 
         <div class="panel-body" id="panel-body">
-          <!-- Mode-specific controls injected by W3/W4 -->
-          <p class="panel-placeholder">Interactive controls loading in W3…</p>
+          <p class="panel-placeholder">Loading controls…</p>
         </div>
 
         <div class="metrics-panel" id="metrics-panel">
@@ -206,10 +229,10 @@
           </div>
         </div>
 
-        <button class="btn-generalize" id="btn-generalize" disabled>
+        <button class="btn-generalize" id="btn-generalize" disabled aria-label="Run TP-GPT generalization">
           Generalize TP-GPT →
         </button>
-        <button class="btn-reset" id="btn-reset">
+        <button class="btn-reset" id="btn-reset" aria-label="Reset scene to demo configuration">
           Reset to demo
         </button>
       </div>
@@ -218,110 +241,300 @@
   </section>
 
   <!-- =====================================================================
-       HOW IT WORKS  (figures replaced in W5)
+       HOW IT WORKS
        ===================================================================== -->
-  <section id="how-it-works" class="how">
-    <div class="container">
+  <section id="how-it-works">
+    <div class="section-inner">
+      <div class="section-label">HOW IT WORKS</div>
+      <h2 class="section-heading">The TP-GPT Algorithm</h2>
+      <p class="section-subtext">
+        Four steps from a single demonstration to a generalized policy. Based on
+        <a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Franzese et al. 2024</a>.
+      </p>
 
-      <div class="how__header">
-        <p class="section-label">Algorithm</p>
-        <h2>The TP-GPT Algorithm</h2>
-        <p style="max-width:560px; margin:var(--space-md) auto 0;">
-          Gaussian Process Transportation maps a learned velocity field
-          to any new task configuration — no retraining required.
-        </p>
+      <div class="steps-grid">
+
+        <div class="step-card" data-step="1">
+          <div class="step-number">01</div>
+          <div class="step-content">
+            <h3>Learn from demonstration</h3>
+            <p>A Gaussian Process fits the velocity field
+               <strong>ẋ = f(x)</strong> from a single kinesthetic demonstration.
+               The GP's zero-mean prior ensures zero velocity in regions with no evidence —
+               the robot stays still unless it has seen training data nearby.</p>
+            <div class="step-equation">ẋ = f(x) &nbsp;·&nbsp; Eq. (1)</div>
+            <div class="step-figure">
+              <img src="assets/figures/phase2_letter_C_field.png"
+                   alt="GP velocity field learned from a letter-C demonstration"
+                   loading="lazy">
+              <span class="fig-caption">Learned velocity field · letter-C demo</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" data-step="2">
+          <div class="step-number">02</div>
+          <div class="step-content">
+            <h3>Track keypoints</h3>
+            <p>Source keypoints <strong>S</strong> (e.g. box corners, shelf slot corners)
+               and target keypoints <strong>T</strong> define how the scene has changed.
+               Just a handful of paired points — no full scene reconstruction needed.</p>
+            <div class="step-equation">S = {s₁…sₙ} &nbsp;→&nbsp; T = {t₁…tₙ}</div>
+            <div class="step-figure">
+              <img src="assets/figures/phase3_fig3_partial.png"
+                   alt="Source and target keypoint distributions for task parameterization"
+                   loading="lazy">
+              <span class="fig-caption">Source → target distributions (Fig. 3, panels 1–3)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" data-step="3">
+          <div class="step-number">03</div>
+          <div class="step-content">
+            <h3>Transport the policy</h3>
+            <p>The map <strong>ϕ(x) = γ(x) + ψ(γ(x))</strong> transforms every point
+               from source to target scene. γ is a linear SVD-based alignment; ψ is a GP
+               correcting the nonlinear residual. Velocities, orientations, and stiffness
+               are transported via the Jacobian <strong>J = ∂ϕ/∂x</strong>.</p>
+            <div class="step-equation">ϕ(x) = γ(x) + ψ(γ(x)) &nbsp;·&nbsp; Eq. (7)</div>
+            <div class="step-figure">
+              <img src="assets/figures/phase4_fig5_scheme.png"
+                   alt="TP-GPT transportation scheme diagram"
+                   loading="lazy">
+              <span class="fig-caption">Transportation scheme (Fig. 5)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card" data-step="4">
+          <div class="step-number">04</div>
+          <div class="step-content">
+            <h3>Execute with uncertainty</h3>
+            <p>Total uncertainty <strong>Σ = Σ_transport + Σ_epistemic</strong> quantifies
+               confidence everywhere in the workspace. High uncertainty near unexplored
+               regions; low near training data. This guides the robot to slow down or seek
+               corrections in uncertain areas.</p>
+            <div class="step-equation">Σ_total = Σ_ϕ + Σ_f̂ &nbsp;·&nbsp; Eq. (18)</div>
+            <div class="step-figure">
+              <img src="assets/figures/phase5_fig6_uncertainty.png"
+                   alt="Uncertainty triptych showing transport, epistemic, and total uncertainty fields"
+                   loading="lazy">
+              <span class="fig-caption">Uncertainty triptych (Fig. 6): transport / epistemic / total</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- .steps-grid -->
+
+      <!-- Full-width Fig. 7 -->
+      <div class="wide-figure">
+        <h3>Baseline comparison — 2D surface cleaning</h3>
+        <p>TP-GPT is the <em>only method</em> with well-calibrated epistemic uncertainty
+           that grows correctly outside the training distribution. Ensemble methods
+           (E-RF, E-NN, E-NF) plateau out-of-distribution; KMP and LE have no uncertainty.</p>
+        <img src="assets/figures/phase6_fig7_comparison.png"
+             alt="2D surface cleaning comparison across six methods including TP-GPT, KMP, LE, E-RF, E-NN, E-NF"
+             loading="lazy"
+             class="wide-img">
+        <span class="fig-caption">Fig. 7 · Six methods · 2D surface cleaning task</span>
       </div>
-
-      <div class="step-grid">
-
-        <div class="step-card">
-          <span class="step-card__number">01</span>
-          <p class="step-card__title">Learn from demonstration</p>
-          <p class="step-card__desc">A GP fits the velocity field from a single demo.</p>
-          <div class="step-card__img-placeholder">figure coming in W5</div>
-        </div>
-
-        <div class="step-card">
-          <span class="step-card__number">02</span>
-          <p class="step-card__title">Track keypoints</p>
-          <p class="step-card__desc">Source and target point sets define the scene change.</p>
-          <div class="step-card__img-placeholder">figure coming in W5</div>
-        </div>
-
-        <div class="step-card">
-          <span class="step-card__number">03</span>
-          <p class="step-card__title">Transport the policy</p>
-          <p class="step-card__desc">ϕ(x) = γ(x) + ψ(γ(x)) maps the policy to the new scene.</p>
-          <div class="step-card__img-placeholder">figure coming in W5</div>
-        </div>
-
-        <div class="step-card">
-          <span class="step-card__number">04</span>
-          <p class="step-card__title">Execute with uncertainty</p>
-          <p class="step-card__desc">Epistemic and transportation uncertainty guide execution.</p>
-          <div class="step-card__img-placeholder">figure coming in W5</div>
-        </div>
-
-      </div><!-- /.step-grid -->
 
     </div>
   </section>
 
   <!-- =====================================================================
-       RESULTS  (placeholder for W5)
+       RESULTS
        ===================================================================== -->
-  <section id="results" class="results">
-    <div class="container">
+  <section id="results">
+    <div class="section-inner">
+      <div class="section-label">RESULTS</div>
+      <h2 class="section-heading">Benchmark Performance</h2>
+      <p class="section-subtext">
+        TP-GPT reproduced across Secs. V-A, V-B, V-C.
+        Mann-Whitney U-test ranking confirms TP-GPT achieves rank 1 on Fréchet distance,
+        area between curves, and DTW. Baselines on 20-repetition runs.
+      </p>
 
-      <div class="results__header">
-        <p class="section-label">Quantitative results</p>
-        <h2>Benchmarks</h2>
+      <!-- Table I -->
+      <div class="results-table-wrapper">
+        <h3>Table I · Method comparison</h3>
+        <p class="table-caption">
+          Methods compared on 2D surface cleaning (Sec. V-A).
+          TP-GPT is the only method with analytical, well-calibrated uncertainty.
+        </p>
+        <div class="table-scroll">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Modality</th>
+                <th>Velocity gen.</th>
+                <th>Uncertainty</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="highlight-row">
+                <td><strong>TP-GPT (ours)</strong></td>
+                <td>GP</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td class="type-analytical">Analytical</td>
+              </tr>
+              <tr>
+                <td>KMP</td>
+                <td>Kernel</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td class="type-none">None</td>
+              </tr>
+              <tr>
+                <td>Laplacian Editing</td>
+                <td>Graph</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td class="type-none">None</td>
+              </tr>
+              <tr>
+                <td>Ensemble RF</td>
+                <td>Random Forest</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td class="type-estimated">Estimated</td>
+              </tr>
+              <tr>
+                <td>Ensemble NN</td>
+                <td>Neural Net</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td class="type-estimated">Estimated</td>
+              </tr>
+              <tr>
+                <td>Ensemble NF</td>
+                <td>Norm. Flows</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td class="type-estimated">Estimated</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="results__placeholder">
-        Comparison figures and tables — reproduced in W5
+      <!-- Benchmark figures -->
+      <div class="results-figures">
+        <div class="result-fig">
+          <h3>Training set performance (Fig. 9)</h3>
+          <img src="assets/figures/phase7_fig9_boxplots.png"
+               alt="Boxplots comparing 8 method variants across 5 metrics on training set, 20 repetitions"
+               loading="lazy">
+          <span class="fig-caption">5 metrics · 8 method variants · 20 repetitions</span>
+        </div>
+        <div class="result-fig">
+          <h3>Test set generalization (Fig. 10)</h3>
+          <img src="assets/figures/phase7_fig10_test_boxplots.png"
+               alt="Boxplots showing final position and orientation error on unseen test configurations"
+               loading="lazy">
+          <span class="fig-caption">Final position + orientation error · Unseen frame configurations</span>
+        </div>
+      </div>
+
+      <!-- Honest limitations -->
+      <div class="limitations-note">
+        <span class="limitations-icon" aria-hidden="true">⚠️</span>
+        <div>
+          <strong>Honest limitations:</strong>
+          This reproduction uses greedy GMM rollout instead of LQR (Sec. V-B), and
+          kinematic IK instead of impedance control (Sec. VI). Success rates on 3D tasks
+          are ~25% (reshelving, arm-pose) reflecting open-loop drift without force feedback.
+          See <a href="https://github.com/jaintle/teach-once/blob/main/reports/REPORT.md"
+                 target="_blank" rel="noopener">REPORT.md</a> for full discussion.
+        </div>
       </div>
 
     </div>
   </section>
+
+  <!-- =====================================================================
+       PAPER & CITATION
+       ===================================================================== -->
+  <section id="paper">
+    <div class="section-inner">
+      <div class="section-label">PAPER &amp; CODE</div>
+      <h2 class="section-heading">Built on open research</h2>
+
+      <div class="paper-grid">
+        <div class="paper-card">
+          <div class="paper-card-label">Original paper</div>
+          <h3>Generalization of Task Parameterized Dynamical Systems using Gaussian Process Transportation</h3>
+          <p class="paper-authors">
+            Franzese, G. · Prakash, R. · Kober, J.<br>
+            TU Delft · arXiv:2404.13458 · 2024
+          </p>
+          <a href="https://arxiv.org/abs/2404.13458"
+             target="_blank" rel="noopener"
+             class="btn-outline">Read on arXiv →</a>
+        </div>
+        <div class="paper-card">
+          <div class="paper-card-label">This reproduction</div>
+          <h3>teach-once</h3>
+          <p class="paper-authors">
+            Full paper reproduction + interactive demo.<br>
+            Python TP-GPT · Three.js · MuJoCo · Franka Panda
+          </p>
+          <a href="https://github.com/jaintle/teach-once"
+             target="_blank" rel="noopener"
+             class="btn-outline">View on GitHub →</a>
+        </div>
+      </div>
+
+      <div class="bibtex-block">
+        <div class="bibtex-header">
+          <span>BibTeX</span>
+          <button id="btn-copy-bib" class="btn-tertiary" aria-label="Copy BibTeX to clipboard">Copy</button>
+        </div>
+        <pre class="bibtex-code">@article{franzese2024tpgpt,
+  title   = {Generalization of Task Parameterized Dynamical Systems
+             using Gaussian Process Transportation},
+  author  = {Franzese, Giovanni and Prakash, Ravi and Kober, Jens},
+  journal = {arXiv preprint arXiv:2404.13458},
+  year    = {2024}
+}</pre>
+      </div>
+
+    </div>
+  </section>
+
+  </main><!-- /main -->
 
   <!-- =====================================================================
        FOOTER
        ===================================================================== -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer__inner">
-
-        <div class="footer__left">
-          <span class="footer__wordmark">teach-once</span>
-          <p class="footer__tagline">
-            Show a robot once.<br>
-            It generalizes everywhere.
-          </p>
-        </div>
-
-        <ul class="footer__links">
-          <li><a href="#demo">Demo</a></li>
-          <li><a href="#how-it-works">How it works</a></li>
-          <li><a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Paper (arXiv)</a></li>
-          <li><a href="https://github.com/jaintle/teach-once" target="_blank" rel="noopener">GitHub</a></li>
-        </ul>
-
-        <div class="footer__right">
-          <p class="footer__credit">
-            Built by Abhinav Jain<br>
-            Based on Franzese et al. 2024
-          </p>
-        </div>
-
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-col">
+        <span class="footer-wordmark">teach-once</span>
+        <p class="footer-tagline">Show it once. It generalizes everywhere.</p>
+      </div>
+      <div class="footer-col footer-links-col">
+        <a href="#demo">Demo</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#results">Results</a>
+        <a href="https://arxiv.org/abs/2404.13458" target="_blank" rel="noopener">Paper</a>
+        <a href="https://github.com/jaintle/teach-once" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-col footer-credits">
+        <p>Reproduction by <a href="https://github.com/jaintle" target="_blank" rel="noopener">Abhinav Jain</a></p>
+        <p>Based on Franzese, Prakash, Kober (2024)</p>
+        <p class="footer-dim">Built with Claude · Anthropic</p>
       </div>
     </div>
   </footer>
 
   <!-- =====================================================================
-       SCRIPTS — loaded synchronously at bottom of body
-       Order: three.js → OrbitControls → scene.js → gp_infer.js
-              → mode_reshelving.js → mode_cleaning.js → mode_armpose.js → ui.js
+       SCRIPTS — order: three.js → OrbitControls → scene.js → gp_infer.js
+                        → mode_reshelving.js → mode_cleaning.js → mode_armpose.js → ui.js
        ===================================================================== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -349,13 +562,12 @@
 
   <script>
     // -------------------------------------------------------------------------
-    // Page load sequence — add 'loaded' class to trigger staggered hero anims
+    // Page load — add 'loaded' class to trigger staggered hero animations
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', function () {
       requestAnimationFrame(function () {
         document.body.classList.add('loaded');
       });
-      // Initialize Three.js scene
       if (typeof Scene !== 'undefined') {
         Scene.init('robot-canvas');
         Scene.loadScene('reshelving');
@@ -363,7 +575,7 @@
     });
 
     // -------------------------------------------------------------------------
-    // Smooth scroll for CTA button (cross-browser)
+    // Smooth scroll for CTA / nav links
     // -------------------------------------------------------------------------
     document.querySelectorAll('.js-smooth-scroll, [data-nav]').forEach(function (link) {
       link.addEventListener('click', function (e) {
@@ -403,7 +615,7 @@
     })();
 
     // -------------------------------------------------------------------------
-    // Card hover ripple — track mouse position per card
+    // Task card hover ripple
     // -------------------------------------------------------------------------
     document.querySelectorAll('.task-card').forEach(function (card) {
       card.addEventListener('mousemove', function (e) {
@@ -414,8 +626,6 @@
         card.style.setProperty('--mouse-y', y);
       });
     });
-
-    // Mode tabs and reset button are now wired in ui.js (W4).
   </script>
 
 </body>

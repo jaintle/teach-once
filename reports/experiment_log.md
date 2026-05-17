@@ -1636,3 +1636,36 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 **Open questions / deferred work:**
 - W5: How-it-works animated figures, results section polish
 - Mobile responsiveness pass
+
+---
+
+## Phase W5 — "How it works", Results, Paper, Final Polish
+
+**Date:** 2026-05-17
+
+**Website section:** W5 (final website phase)
+
+**Files added/changed:**
+- `docs/index.html` — full rewrite: meta/OG/Twitter tags, favicon, `<main>` wrapper, aria labels, rebuilt how-it-works / results / paper sections, updated footer, `<section id="paper">` added, `#results` nav link added
+- `docs/css/style.css` — appended W5 rules: step cards, results table, paper cards, BibTeX block, footer, scroll-margin, mobile breakpoints, reduced-motion
+- `docs/js/ui.js` — added `initScrollAnimations()` (IntersectionObserver on `.step-card`), BibTeX copy button
+- `docs/assets/figures/phase2_letter_C_field.png` — copied from `reports/figures/`
+
+**What works:**
+- "How it works": 4 step cards with scroll-in animation, equations, paper figures, Fig. 7 full-width
+- Results: Table I with TP-GPT row highlighted, Fig. 9 + Fig. 10 boxplots, limitations note
+- Paper section: two cards (arXiv + GitHub), BibTeX block with copy button
+- Footer: 3-column grid (wordmark / nav links / credits)
+- All 7 figure assets verified present (no 404s)
+- All 4 GIF assets verified present
+- Mobile: single-column breakpoints at 768px for steps, results, paper, footer grids
+- `prefers-reduced-motion`: step card animations disabled
+- `scroll-margin-top: 60px` on all sections (sticky nav clearance)
+- `role="img"` + `aria-label` on Three.js canvas
+
+**Math / equations referenced:** Eq. (1), (7), (18) — cited in step card equations
+
+**Open questions / deferred work:**
+- Visual browser test required (no headless runner available)
+- GIF lazy-loading confirmed via `loading="lazy"` attribute; actual deferral depends on browser viewport
+- `phase2_letter_C_field.png` is a 2D matplotlib figure, looks correct for Step 1 (velocity field)
