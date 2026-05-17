@@ -163,22 +163,23 @@ const Scene = (() => {
       emissiveIntensity: 0.35,
     });
 
-    // Two horizontal planks (0.5 w × 0.016 h × 0.16 d)
-    [-0.12, 0.12].forEach((dy) => {
-      const plank = new THREE.Mesh(
-        new THREE.BoxGeometry(0.50, 0.016, 0.16), shelfMat,
-      );
-      plank.position.y = dy;
-      plank.castShadow = true;
-      shelfGroup.add(plank);
-    });
+    // Bottom plank only — open-top shelf so the arm can place from above
+    // (top plank removed: arm descends through y=1.06→0.82, top plank was at y≈1.02)
+    const bottomPlank = new THREE.Mesh(
+      new THREE.BoxGeometry(0.50, 0.016, 0.16), shelfMat,
+    );
+    bottomPlank.position.y = -0.12;
+    bottomPlank.castShadow = true;
+    shelfGroup.add(bottomPlank);
 
-    // Two vertical supports (0.016 w × 0.28 h × 0.16 d)
+    // Two vertical supports — height trimmed to 0.16 (bottom plank + short rail)
+    // Centre of bottom plank: local y=-0.12.  Top of plank: local y=-0.112.
+    // Rail rises 0.15 above plank top → support centre at local y=-0.112+0.075=-0.037.
     [-0.24, 0.24].forEach((dx) => {
       const sup = new THREE.Mesh(
-        new THREE.BoxGeometry(0.016, 0.28, 0.16), shelfMat,
+        new THREE.BoxGeometry(0.016, 0.16, 0.16), shelfMat,
       );
-      sup.position.x = dx;
+      sup.position.set(dx, -0.037, 0);
       sup.castShadow = true;
       shelfGroup.add(sup);
     });
@@ -757,7 +758,10 @@ const Scene = (() => {
   }
 
   function setObjectPos(pos) {
-    if (objectMesh) objectMesh.position.set(pos[0], pos[1], pos[2]);
+    if (!objectMesh) return;
+    objectMesh.position.set(pos[0], pos[1], pos[2]);
+    // Render immediately so the new position shows without waiting for the next idle tick.
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
   }
 
   function setShelfPos(pos) {
@@ -916,6 +920,12 @@ const Scene = (() => {
 
     // Warm-start IK from current arm pose
     let currentAngles = [...HOME_ANGLES];
+    // Two-state flags: wasInCarry becomes true once CARRY starts;
+    // boxReleased becomes true the moment we leave CARRY for the first time.
+    // This ensures the release-snap only fires at the CARRY→PLACE transition,
+    // not at the start of APPROACH (which would yank the box off the table).
+    let wasInCarry  = false;
+    let boxReleased = false;
 
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
@@ -928,13 +938,19 @@ const Scene = (() => {
       // Update mode badge
       if (badge && label) badge.textContent = 'Reshelving · ' + label;
 
-      // Box follows EE from GRASP onwards (EE is at box center — offset 0).
-      // GRASP: arm is at box, box stays put visually (they coincide).
-      // LIFT:  arm rises, box rises with it → visible pickup.
-      // CARRY/PLACE: box moves with arm to shelf.
-      // RETREAT: not included → box stays on shelf as arm pulls away.
-      if (objectMesh && (label === 'GRASP' || label === 'LIFT' || label === 'CARRY' || label === 'PLACE')) {
-        objectMesh.position.set(pos[0], pos[1], pos[2]);
+      if (objectMesh) {
+        if (label === 'GRASP' || label === 'LIFT' || label === 'CARRY') {
+          // Box follows arm: gripped, lifted, carried to shelf.
+          objectMesh.position.set(pos[0], pos[1], pos[2]);
+          if (label === 'CARRY') wasInCarry = true;
+        } else if (wasInCarry && !boxReleased) {
+          // First frame after CARRY ended (first PLACE frame).
+          // pos here == transported[4] exactly (alpha=0 of PLACE segment).
+          // Pin the box to this position and freeze — arm retreats, box stays.
+          objectMesh.position.set(pos[0], pos[1], pos[2]);
+          boxReleased = true;
+        }
+        // APPROACH / subsequent PLACE / RETREAT: box position unchanged.
       }
 
       controls.update();

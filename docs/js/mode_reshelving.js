@@ -19,6 +19,7 @@ const ModeReshelving = (() => {
 
   let hasBeenDragged = false;
   let isRunning = false;
+  let hasPlaced = false;  // true after first successful generalize — sliders snap box back to table
 
   // ---------------------------------------------------------------------------
   // Init
@@ -122,6 +123,12 @@ const ModeReshelving = (() => {
     document.getElementById('config-text').textContent =
       `Box: (${boxX.toFixed(2)}, ${boxZ.toFixed(2)})  Shelf: h=${shelfY.toFixed(2)}, d=${shelfZ.toFixed(2)}`;
 
+    // If the arm already placed the box once, snap it back to its table position so
+    // the user can immediately see what the new configuration looks like before re-running.
+    if (hasPlaced) {
+      Scene.setObjectPos([boxX, 0.785, boxZ]);
+    }
+
     updateTransportPreview();
   }
 
@@ -162,11 +169,25 @@ const ModeReshelving = (() => {
       // Transport demo waypoints
       const transported = transport.transform(DEMO_DATA.waypoints);
 
+      // Hard-pin the entire shelf-approach chain so the arm descends from directly
+      // above the NEW shelf — not wherever the GP transport guessed.
+      //
+      //   wp[3] CARRY   — hover above new shelf, high enough to clear the plank sides
+      //   wp[4] PLACE   — box centre on plank surface (plank top = shelfY−0.112, half-box = 0.035)
+      //                   +0.003 m clearance so box visually floats on plank, no z-fight
+      //   wp[5] RETREAT — lift straight back up to the hover height
+      //
+      const CARRY_Y = Math.max(shelfY + 0.16, 1.06); // at least 16 cm above shelf
+      const PLACE_Y = shelfY - 0.074;                // plank top + box half-height + 3 mm gap
+      transported[3] = [0.5, CARRY_Y, shelfZ];
+      transported[4] = [0.5, PLACE_Y, shelfZ];
+      transported[5] = [0.5, CARRY_Y, shelfZ];
+
       // Compute uncertainty at all waypoints
       const uncertainties = transport.getUncertainty(DEMO_DATA.waypoints);
       const meanSigma = uncertainties.reduce((s, v) => s + v, 0) / uncertainties.length;
 
-      // EE error: distance from transported place waypoint to shelf slot center
+      // EE error: distance from transported place waypoint to shelf slot centre
       const placeWp = transported[4];
       const shelfCenter = [0.5, shelfY, shelfZ];
       const finalErr = euclidean(placeWp, shelfCenter);
@@ -182,15 +203,13 @@ const ModeReshelving = (() => {
         transported, DEMO_DATA.phases
       );
 
-      // Play trajectory in 3D scene
+      // Play trajectory in 3D scene.
+      // Box is frozen to transported[4] automatically on the first PLACE frame —
+      // no post-hoc setObjectPos needed (that was causing the visible "sinking" snap).
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectory(positions, phaseLabels, 40);
 
-      // Snap box to final resting position on the lower shelf plank.
-      // Lower plank top = shelfY - 0.112; box center = plank top + half box (0.035) = shelfY - 0.077.
-      // This matches the PLACE waypoint y exactly, so there is no visible snap.
-      Scene.setObjectPos([0.5, shelfY - 0.077, shelfZ]);
-
+      hasPlaced = true;
       updatePhaseBadge('DONE ✓');
     } catch (e) {
       console.error('[reshelving] generalize error:', e);
@@ -275,6 +294,7 @@ const ModeReshelving = (() => {
     shelfY = 0.900; shelfZ = -0.700;
     hasBeenDragged = false;
     isRunning = false;
+    hasPlaced = false;
 
     // 2. Reset sliders (only if panel has been rendered)
     const sliderDefs = [
