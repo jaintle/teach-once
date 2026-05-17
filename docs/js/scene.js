@@ -476,13 +476,22 @@ const Scene = (() => {
     _trailPoints = [];
   }
 
-  // Draw a brown coffee/juice splatter onto a 2D canvas context.
+  // Draw a randomised brown coffee/juice splatter onto a 2D canvas context.
   // type: 'scatter' (multi-blob), 'puddle' (central blob), 'line' (horizontal streak)
+  // Blob positions are jittered with Math.random() on every call so each tilt
+  // configuration presents a visually distinct mess and produces different coverage.
   // Also counts non-transparent pixels so getSpillCoverage() can measure erasure.
   function _drawSpill(ctx, type) {
+    ctx.globalCompositeOperation = 'source-over';  // defensive: undo any 'destination-out' left by playback
     ctx.clearRect(0, 0, 256, 256);
 
+    // Jitter a value by ±range using Math.random()
+    function rnd(v, range) { return v + (Math.random() - 0.5) * 2 * range; }
+
     function blob(x, y, r) {
+      // Clamp so blobs never leave the canvas
+      x = Math.max(r, Math.min(256 - r, x));
+      y = Math.max(r, Math.min(256 - r, y));
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0,   'rgba(160, 70, 10, 0.92)');
       g.addColorStop(0.5, 'rgba(140, 55, 5,  0.75)');
@@ -494,47 +503,44 @@ const Scene = (() => {
     }
 
     if (type === 'puddle') {
-      // Single large central blob + a few satellites
-      blob(128, 128, 72);
-      blob(100, 108, 34);
-      blob(156, 150, 30);
-      blob(114, 158, 22);
-      blob(150,  98, 20);
+      // Large central blob: jitter centre by ±18px so each reset looks different
+      const cx = rnd(128, 18), cy = rnd(128, 18);
+      blob(cx,             cy,             rnd(68, 8));
+      blob(rnd(cx-28, 10), rnd(cy-22, 10), rnd(32, 7));
+      blob(rnd(cx+26, 10), rnd(cy+22, 10), rnd(28, 7));
+      blob(rnd(cx-14,  8), rnd(cy+30,  8), rnd(20, 5));
+      blob(rnd(cx+22,  8), rnd(cy-30,  8), rnd(18, 5));
+
     } else if (type === 'line') {
-      // Horizontal streak at z=0 (canvas y=128): draw ellipse via scaled arc
-      // radiusX ≈ 85px (world Δx 0.166), radiusY ≈ 22px (world Δz 0.030)
+      // Horizontal streak: jitter z-position (canvas y) by ±20px so coverage varies
+      const lineX = rnd(128,  8);
+      const lineY = rnd(128, 20);   // this is the z-axis jitter that matters for coverage
+      const rxPx  = rnd(85,  10);   // vary streak length slightly
       ctx.save();
-      ctx.translate(128, 128);
-      ctx.scale(1, 0.28);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 88);
-      g.addColorStop(0,   'rgba(160, 70, 10, 0.95)');
-      g.addColorStop(0.55,'rgba(140, 55, 5,  0.78)');
-      g.addColorStop(1,   'rgba(120, 40, 0,  0)');
+      ctx.translate(lineX, lineY);
+      ctx.scale(1, rnd(0.28, 0.05));  // vary squish slightly
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rxPx);
+      g.addColorStop(0,    'rgba(160, 70, 10, 0.95)');
+      g.addColorStop(0.55, 'rgba(140, 55, 5,  0.78)');
+      g.addColorStop(1,    'rgba(120, 40, 0,  0)');
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(0, 0, 88, 0, Math.PI * 2);
-      ctx.fill();
-      // A second pass for a more ragged edge
-      ctx.scale(1, 1.6);
-      const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, 88);
-      g2.addColorStop(0,   'rgba(150, 65, 8, 0.60)');
-      g2.addColorStop(1,   'rgba(120, 40, 0, 0)');
-      ctx.fillStyle = g2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 88, 0, Math.PI * 2);
+      ctx.arc(0, 0, rxPx, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+
     } else {
-      // scatter (default): multi-blob spread across table
-      blob(128, 128, 58);
-      blob( 88, 105, 36);
-      blob(162,  92, 32);
-      blob(152, 162, 42);
-      blob( 82, 158, 28);
-      blob(112,  72, 18);
-      blob(182, 142, 22);
-      blob( 65, 130, 16);
-      blob(175,  60, 14);
+      // scatter (default): jitter all blob centres ±18px so tilt changes yield
+      // fresh coverage numbers — arm path adapts but mess is always a new challenge
+      blob(rnd(128, 18), rnd(128, 18), rnd(56, 8));
+      blob(rnd( 88, 18), rnd(105, 18), rnd(34, 8));
+      blob(rnd(162, 18), rnd( 92, 18), rnd(30, 8));
+      blob(rnd(152, 18), rnd(162, 18), rnd(40, 8));
+      blob(rnd( 82, 15), rnd(158, 15), rnd(26, 6));
+      blob(rnd(112, 15), rnd( 72, 15), rnd(16, 5));
+      blob(rnd(182, 15), rnd(142, 15), rnd(20, 5));
+      blob(rnd( 65, 12), rnd(130, 12), rnd(14, 4));
+      blob(rnd(175, 12), rnd( 60, 12), rnd(12, 4));
     }
 
     // Count opaque pixels for later coverage measurement
@@ -1070,6 +1076,11 @@ const Scene = (() => {
       renderer.render(threeScene, camera);
       await new Promise(r => setTimeout(r, dt));
     }
+
+    // Reset compositing mode — playback sets 'destination-out' to erase the spill.
+    // Without this reset, any subsequent _drawSpill call draws in erase mode and
+    // produces a blank canvas (the mess never reappears after config changes).
+    if (_spillCtx) _spillCtx.globalCompositeOperation = 'source-over';
 
     if (eeSphere) {
       eeSphere.material.emissiveIntensity = 0.25;

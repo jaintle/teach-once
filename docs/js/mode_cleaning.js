@@ -102,9 +102,10 @@ const ModeCleaning = (() => {
     currentMess = 'scatter';
     isRunning   = false;
     renderControlPanel();
-    updateMetrics(null);
     updatePhaseBadge('READY');
     Scene.updateSurfaceMesh({ type: 'flat', tilt: 0 });
+    // Show live path shift immediately (0.0 mm at flat — grows as user tilts)
+    updateTransportPreview();
     // Cleaning is always ready — button enabled immediately
     const btn = document.getElementById('btn-generalize');
     if (btn) btn.disabled = false;
@@ -196,7 +197,7 @@ const ModeCleaning = (() => {
   }
 
   // ---------------------------------------------------------------------------
-  // Quick uncertainty preview
+  // Quick uncertainty + path-shift preview (runs live as sliders move)
   // ---------------------------------------------------------------------------
   function updateTransportPreview() {
     try {
@@ -204,9 +205,17 @@ const ModeCleaning = (() => {
       const T = getSurfaceKeypoints(currentTilt);
       const transport = new TPGPTTransport();
       transport.fit(S_FLAT, T);
+      const transported = transport.transform(preset.waypoints);
       const u = transport.getUncertainty(preset.waypoints);
-      const mean = u.reduce((s, v) => s + v, 0) / u.length;
-      updateMetrics({ sigma: mean, coverage: null });
+      const sigma = u.reduce((s, v) => s + v, 0) / u.length;
+      // Mean Euclidean displacement of waypoints due to transport (metres)
+      const pathShift = preset.waypoints.reduce((sum, wp, i) => {
+        const tp = transported[i];
+        return sum + Math.sqrt(
+          (tp[0]-wp[0])**2 + (tp[1]-wp[1])**2 + (tp[2]-wp[2])**2
+        );
+      }, 0) / preset.waypoints.length;
+      updateMetrics({ sigma, pathShift, coverage: null });
     } catch (e) {
       console.warn('[cleaning] preview error:', e.message);
     }
@@ -282,12 +291,20 @@ const ModeCleaning = (() => {
       const u = transport.getUncertainty(preset.waypoints);
       const meanSigma = u.reduce((s, v) => s + v, 0) / u.length;
 
+      // Mean Euclidean displacement of waypoints due to transport (metres → mm display)
+      const pathShift = preset.waypoints.reduce((sum, wp, i) => {
+        const tp = transported[i];
+        return sum + Math.sqrt(
+          (tp[0]-wp[0])**2 + (tp[1]-wp[1])**2 + (tp[2]-wp[2])**2
+        );
+      }, 0) / preset.waypoints.length;
+
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectoryClean(positions, labels, 30);
 
       // Coverage = fraction of spill actually erased from the canvas
       const coverage = Scene.getSpillCoverage();
-      updateMetrics({ sigma: meanSigma, coverage });
+      updateMetrics({ sigma: meanSigma, pathShift, coverage });
       updatePhaseBadge('DONE ✓');
     } catch (e) {
       console.error('[cleaning] generalize error:', e);
@@ -303,8 +320,9 @@ const ModeCleaning = (() => {
   // Metrics display (null-safe)
   // ---------------------------------------------------------------------------
   function updateMetrics(opts) {
-    const sigma    = opts ? opts.sigma    : null;
-    const coverage = opts ? opts.coverage : null;
+    const sigma     = opts ? opts.sigma     : null;
+    const coverage  = opts ? opts.coverage  : null;
+    const pathShift = opts ? opts.pathShift : null;  // metres; display in mm
 
     const sigmaEl = document.getElementById('metric-sigma');
     const errorEl = document.getElementById('metric-error');
@@ -327,9 +345,15 @@ const ModeCleaning = (() => {
         errorEl.style.color = '';
       }
     }
-    // GP confidence = transport quality based on sigma — distinct from coverage %
-    if (confEl) confEl.textContent = sigma != null
-      ? Math.max(0, (1 - sigma * 8) * 100).toFixed(0) + '%' : '—';
+
+    // Path shift: mean displacement of demo waypoints due to TP-GPT transport.
+    // 0 mm = flat surface (no adaptation needed). Grows with tilt.
+    // Replaces "GP confidence" which was constant across tilt values.
+    const confLabelEl = document.querySelector(
+      '#metrics-panel .metric:nth-child(3) .metric-label');
+    if (confLabelEl) confLabelEl.textContent = 'Path shift';
+    if (confEl) confEl.textContent = pathShift != null
+      ? (pathShift * 1000).toFixed(1) + ' mm' : '—';
   }
 
   function updatePhaseBadge(label) {
