@@ -140,6 +140,7 @@
           >
           <p class="task-card__desc">
             TP-GPT traces path through new arm configuration
+            (analog of Sec. VI-B dressing — cloth sim. not available in kinematic MuJoCo)
           </p>
         </div>
 
@@ -215,16 +216,19 @@
         </div>
 
         <div class="metrics-panel" id="metrics-panel">
-          <div class="metric">
-            <span class="metric-label">Transport σ</span>
+          <div class="metric"
+               title="Transport uncertainty σ: how much the GP transportation map varies at these scene parameters. Lower = more confident.">
+            <span class="metric-label">Uncertainty σ</span>
             <span class="metric-value" id="metric-sigma">—</span>
           </div>
-          <div class="metric">
-            <span class="metric-label">EE error</span>
+          <div class="metric"
+               title="Distance between the transported goal waypoint and the actual target position. Lower = better.">
+            <span class="metric-label">Goal distance</span>
             <span class="metric-value" id="metric-error">—</span>
           </div>
-          <div class="metric">
-            <span class="metric-label">GP confidence</span>
+          <div class="metric"
+               title="GP confidence: 1 − normalized uncertainty. Higher = more reliable generalization.">
+            <span class="metric-label">Confidence</span>
             <span class="metric-value" id="metric-conf">—</span>
           </div>
         </div>
@@ -232,6 +236,9 @@
         <button class="btn-generalize" id="btn-generalize" disabled aria-label="Run TP-GPT generalization">
           Generalize TP-GPT →
         </button>
+        <p class="btn-subtext">
+          Runs TP-GPT inference in your browser and animates the transported policy on the arm.
+        </p>
         <button class="btn-reset" id="btn-reset" aria-label="Reset scene to demo configuration">
           Reset to demo
         </button>
@@ -267,7 +274,7 @@
               <img src="assets/figures/phase2_letter_C_field.png"
                    alt="GP velocity field learned from a letter-C demonstration"
                    loading="lazy">
-              <span class="fig-caption">Learned velocity field · letter-C demo</span>
+              <span class="fig-caption">Learned velocity field · letter-C demo · Sec. III-A</span>
             </div>
           </div>
         </div>
@@ -284,7 +291,7 @@
               <img src="assets/figures/phase3_fig3_partial.png"
                    alt="Source and target keypoint distributions for task parameterization"
                    loading="lazy">
-              <span class="fig-caption">Source → target distributions (Fig. 3, panels 1–3)</span>
+              <span class="fig-caption">Source → target distributions · Fig. 3 (panels 1–3) · Sec. IV-A</span>
             </div>
           </div>
         </div>
@@ -302,7 +309,7 @@
               <img src="assets/figures/phase4_fig5_scheme.png"
                    alt="TP-GPT transportation scheme diagram"
                    loading="lazy">
-              <span class="fig-caption">Transportation scheme (Fig. 5)</span>
+              <span class="fig-caption">Transportation scheme · Fig. 5 · Sec. IV-C</span>
             </div>
           </div>
         </div>
@@ -320,12 +327,21 @@
               <img src="assets/figures/phase5_fig6_uncertainty.png"
                    alt="Uncertainty triptych showing transport, epistemic, and total uncertainty fields"
                    loading="lazy">
-              <span class="fig-caption">Uncertainty triptych (Fig. 6): transport / epistemic / total</span>
+              <span class="fig-caption">Uncertainty triptych · Fig. 6 · Sec. IV-E</span>
             </div>
           </div>
         </div>
 
       </div><!-- .steps-grid -->
+
+      <p class="simplification-note">
+        <strong>3D simulation note:</strong>
+        Sec. VI-B (robot dressing) requires deformable cloth simulation unavailable in our
+        kinematic MuJoCo setup. It is replaced by arm-pose following, which preserves the
+        same generalization challenge: adapting a path to a novel kinematic configuration
+        from a single demonstration. Secs. VI-A and VI-C (reshelving and surface cleaning)
+        are reproduced as direct analogs.
+      </p>
 
       <!-- Full-width Fig. 7 -->
       <div class="wide-figure">
@@ -337,7 +353,7 @@
              alt="2D surface cleaning comparison across six methods including TP-GPT, KMP, LE, E-RF, E-NN, E-NF"
              loading="lazy"
              class="wide-img">
-        <span class="fig-caption">Fig. 7 · Six methods · 2D surface cleaning task</span>
+        <span class="fig-caption">Baseline comparison · Fig. 7 · Sec. V-A</span>
       </div>
 
     </div>
@@ -352,8 +368,11 @@
       <h2 class="section-heading">Benchmark Performance</h2>
       <p class="section-subtext">
         TP-GPT reproduced across Secs. V-A, V-B, V-C.
-        Mann-Whitney U-test ranking confirms TP-GPT achieves rank 1 on Fréchet distance,
-        area between curves, and DTW. Baselines on 20-repetition runs.
+        Mann-Whitney U-test ranking: TP-GPT achieves rank 1 on Fréchet distance, area
+        between curves, and DTW. DMP ranks 1 on final position error in this reproduction
+        — a known divergence from the paper caused by the LQR→greedy-GMM simplification
+        in Sec. V-B (see <a href="https://github.com/jaintle/teach-once/blob/main/reports/REPORT.md" target="_blank" rel="noopener">REPORT.md</a>).
+        Baselines on 20-repetition runs.
       </p>
 
       <!-- Table I -->
@@ -475,6 +494,12 @@
           <a href="https://arxiv.org/abs/2404.13458"
              target="_blank" rel="noopener"
              class="btn-outline">Read on arXiv →</a>
+          <a href="https://github.com/franzesegiovanni/policy_transportation"
+             target="_blank" rel="noopener"
+             class="btn-outline">Original code →</a>
+          <a href="https://youtu.be/bE6uOnAQBLo"
+             target="_blank" rel="noopener"
+             class="btn-outline btn-video">Watch paper video →</a>
         </div>
         <div class="paper-card">
           <div class="paper-card-label">This reproduction</div>
@@ -527,7 +552,6 @@
       <div class="footer-col footer-credits">
         <p>Reproduction by <a href="https://github.com/jaintle" target="_blank" rel="noopener">Abhinav Jain</a></p>
         <p>Based on Franzese, Prakash, Kober (2024)</p>
-        <p class="footer-dim">Built with Claude · Anthropic</p>
       </div>
     </div>
   </footer>

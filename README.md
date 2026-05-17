@@ -1,13 +1,28 @@
+<div align="center">
+
 # teach-once
 
-> Show a robot how to do a task once. **TP-GPT** generalizes it everywhere.
+**Show a robot a task once. TP-GPT generalizes it everywhere.**
 
-**Live demo**: https://jaintle.github.io/teach-once/
-**Paper**: [Franzese et al. 2024 — arXiv:2404.13458](https://arxiv.org/abs/2404.13458)
+[![Live Demo](https://img.shields.io/badge/demo-live-00d4ff?style=flat-square&logo=googlechrome&logoColor=white)](https://jaintle.github.io/teach-once/)
+[![Paper](https://img.shields.io/badge/arXiv-2404.13458-b31b1b?style=flat-square)](https://arxiv.org/abs/2404.13458)
+[![Paper Video](https://img.shields.io/badge/video-YouTube-ff0000?style=flat-square&logo=youtube)](https://youtu.be/bE6uOnAQBLo)
+[![Original Code](https://img.shields.io/badge/original-code-333?style=flat-square&logo=github)](https://github.com/franzesegiovanni/policy_transportation)
+[![Python](https://img.shields.io/badge/python-3.11-3776ab?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-105%20passing-success?style=flat-square)](tests/)
 
-Faithful reproduction of **TP-GPT** (Task-Parameterized Gaussian Process
-Transportation) with a fully interactive web demo. Drag objects, draw paths,
-pose the arm — watch the robot adapt in real time.
+<br>
+
+Faithful reproduction of **TP-GPT** (Task-Parameterized Gaussian
+Process Transportation) from Franzese et al. 2024, with a fully
+interactive browser demo — no installation required.
+
+[**Try the live demo →**](https://jaintle.github.io/teach-once/)
+
+![TP-GPT highlight reel](reports/figures/final_highlight.gif)
+
+</div>
 
 ---
 
@@ -233,7 +248,6 @@ teach-once/
 ├── results/              # CSV/NPZ numerical results
 ├── REPORT.md             # Technical report
 ├── FIGURE_INDEX.md       # Figure → script → paper mapping
-└── experiment_log.md     # Per-phase implementation notes
 
 ---
 
@@ -263,10 +277,22 @@ The paper uses Cartesian impedance control — this gap is documented in
 }
 ```
 
+**Original code**: https://github.com/franzesegiovanni/policy_transportation
+**Paper video**: https://youtu.be/bE6uOnAQBLo
+
 ---
 
-## Built by
+## Acknowledgements
 
-[Abhinav Jain](https://github.com/jaintle) ·
-Reproduction assisted by [Claude](https://claude.ai) (Anthropic) ·
-Based on research by Franzese, Prakash, Kober at TU Delft
+This reproduction is based entirely on the work of:
+
+> Franzese, G., Prakash, R., Kober, J. (2024).
+> *Generalization of Task Parameterized Dynamical Systems
+> using Gaussian Process Transportation.*
+> TU Delft · arXiv:2404.13458
+
+- [Paper](https://arxiv.org/abs/2404.13458)
+- [Paper video](https://youtu.be/bE6uOnAQBLo)
+- [Original code](https://github.com/franzesegiovanni/policy_transportation)
+
+Reproduction by [Abhinav Jain](https://github.com/jaintle).

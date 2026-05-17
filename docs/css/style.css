@@ -1731,3 +1731,41 @@ section {
   .footer-inner       { grid-template-columns: 1fr; gap: var(--space-lg); }
   .section-heading    { font-size: 1.6rem; }
 }
+
+/* =============================================================================
+   W5 QUICK FIXES — new component classes
+   ============================================================================= */
+
+/* Fix 1: Simplification disclaimer note */
+.simplification-note {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-left: 3px solid var(--accent-border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-md);
+  margin: var(--space-lg) 0;
+  line-height: 1.6;
+}
+.simplification-note strong {
+  color: var(--text-primary);
+}
+
+/* Fix 3: Paper video button variant */
+.btn-video {
+  border-color: #ff4444;
+  color: #ff6666;
+}
+.btn-video:hover {
+  background: rgba(255, 68, 68, 0.1);
+  border-color: #ff4444;
+}
+
+/* Fix 5: Generalize button subtext */
+.btn-subtext {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  text-align: center;
+  margin: 0;
+}

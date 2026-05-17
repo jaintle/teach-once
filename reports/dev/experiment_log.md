@@ -1669,3 +1669,27 @@ Note: Final errors reflect GP DS convergence limitation (zero-mean prior → vel
 - Visual browser test required (no headless runner available)
 - GIF lazy-loading confirmed via `loading="lazy"` attribute; actual deferral depends on browser viewport
 - `phase2_letter_C_field.png` is a 2D matplotlib figure, looks correct for Step 1 (velocity field)
+
+---
+
+## W5 Quick Fixes — Pre-author accuracy + hygiene pass
+Date: 2026-05-17
+Paper section(s) / Website section implemented: W5 post-polish
+Files added/changed:
+- docs/css/style.css — added .simplification-note, .btn-video, .btn-subtext
+- docs/index.html — (already updated in prior session): arm-pose disclaimer,
+  corrected U-test claim, 3 paper card buttons, metric tooltips,
+  btn-subtext paragraph, paper figure captions, footer attribution removed
+- README.md — removed Claude attribution, added paper links to Citation
+  section, badges header, Acknowledgements section replacing "Built by"
+- CLAUDE.md — updated all experiment_log.md paths to reports/dev/
+- reports/dev/experiment_log.md — moved from reports/ (mkdir reports/dev)
+- DEMO.md — created at repo root
+- LICENSE — MIT, copyright Abhinav Jain 2025
+- CHANGELOG.md — v1.0.0 release notes
+What works: All 12 fixes complete.
+What was tricky: HTML for fixes 1-7 was already applied in prior session;
+  only CSS additions and repo-hygiene work remained.
+Math/equation references implemented: N/A
+Numerical sanity checks passed: N/A
+Open questions / deferred work: None. Repo ready to share with paper authors.
