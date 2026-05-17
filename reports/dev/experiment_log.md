@@ -1693,3 +1693,62 @@ What was tricky: HTML for fixes 1-7 was already applied in prior session;
 Math/equation references implemented: N/A
 Numerical sanity checks passed: N/A
 Open questions / deferred work: None. Repo ready to share with paper authors.
+
+---
+
+## Phase W5b — Split-panel portfolio GIF regeneration
+
+Date: 2026-05-17
+
+### Paper section / website section implemented
+No new algorithms. Visualization phase: regenerate all four portfolio GIFs
+as synchronized split-panel animations (DEMO left | TP-GPT right).
+
+### Files added/changed
+- `scripts/make_gif_reshelving.py` — new split-panel reshelving GIF script
+- `scripts/make_gif_cleaning.py`   — new split-panel cleaning GIF script
+- `scripts/make_gif_armpose.py`    — new split-panel arm-pose GIF script
+- `scripts/make_gif_highlight.py`  — new 3-row stacked highlight reel script
+- `reports/figures/final_reshelving.gif` — regenerated (1.4 MB, 240 frames)
+- `reports/figures/final_cleaning.gif`   — regenerated (2.9 MB, 229 frames)
+- `reports/figures/final_armpose.gif`    — regenerated (1.5 MB, 121 frames)
+- `reports/figures/final_highlight.gif`  — new (7.7 MB, 229 frames, 960×720)
+- `docs/assets/gifs/` — all four GIFs copied here for website serving
+
+### What works
+- All three task GIFs render as 960×510 split-panels (480 content + 30 px
+  title bar): DEMO on left (purple trajectory) | TP-GPT on right (cyan trajectory).
+- SVD linear transport (Eqs. 8–11) reimplemented inline in pure numpy per script;
+  no torch/gpytorch dependency needed for rendering.
+- Reshelving: box moves with EE during LIFT/CARRY segments; box removed from
+  static layer and attached to EE in moving layer. σ=0.1062.
+- Cleaning: 3/4 orthographic projection (elev=28°, azim=35°) shows flat source
+  surface (blue) vs 10° tilted target surface (orange-red). σ=0.0012.
+- Arm-pose: 4 coloured keypoint spheres (cyan/magenta/yellow/blue) with
+  flash ring when EE is within 0.07 m. All 4 keypoints reached exactly
+  (σ=0.0000, dist=0.0000 m each).
+- Highlight reel: 3 rows stacked at 240 px each, 960×720, cyan dividers,
+  shorter GIFs loop to match longest (229 frames). 7.7 MB.
+
+### What was tricky
+- Sandbox has no display (no GLFW, no EGL, no OSMesa). Entire rendering
+  pipeline switched from MuJoCo to pure matplotlib Agg — no GPU/display needed.
+- torch/gpytorch unavailable (download timeout). SVD transport reimplemented
+  inline (~15 lines pure numpy each script).
+- `gpt_repro.utils.seeding` imports torch; avoided by seeding manually.
+- `_dense_path` IndexError: original loop over SEG_STEPS used wps[i+1] for i=5
+  (out of bounds on 6 waypoints). Fixed by looping range(len(wps)-1).
+
+### Math/equation references
+- SVD Kabsch alignment: Eqs. (8)–(11), Sec. IV-A.
+
+### Numerical sanity checks passed
+- Reshelving: transport σ=0.1062, final EE dist from shelf goal=0.0000 m
+- Cleaning: transport σ=0.0012
+- Arm-pose: all 4 keypoints reached with dist=0.0000 m (σ=0.0000)
+
+### Open questions / deferred work
+- GIF file sizes: highlight reel is 7.7 MB; could be reduced with palette
+  quantization or lower fps if needed for web performance.
+- Cleaning GIF uses schematic surface tilt (not real GP surface deformation);
+  sufficient for portfolio visualization.

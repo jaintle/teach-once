@@ -1,0 +1,58 @@
+<mujoco model="gpt_scene_reshelving">
+  <compiler angle="radian" meshdir="/sessions/optimistic-laughing-bardeen/mnt/teach-once/src/gpt_repro/envs/assets/franka/assets" autolimits="true"/>
+  <option gravity="0 0 -9.81" timestep="0.002"/>
+  <visual>
+    <headlight ambient="0.5 0.5 0.5" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
+    <rgba haze="0.1 0.15 0.2 1"/>
+    <quality shadowsize="2048" offsamples="4"/>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient"
+             rgb1="0.4 0.6 0.8" rgb2="0.1 0.2 0.4"
+             width="512" height="512"/>
+    <texture name="floor_tex" type="2d" builtin="checker"
+             rgb1="0.72 0.72 0.72" rgb2="0.55 0.55 0.55"
+             width="512" height="512"/>
+    <material name="floor_mat" texture="floor_tex" texrepeat="4 4" reflectance="0.1"/>
+    <material name="table_mat" rgba="0.65 0.45 0.25 1" reflectance="0.05"/>
+    <material name="shelf_mat" rgba="0.55 0.35 0.20 1" reflectance="0.05"/>
+    <material name="object_mat" rgba="0.90 0.50 0.10 1" reflectance="0.1"/>
+    <material name="goal_mat"   rgba="0.20 0.80 0.20 0.6" reflectance="0.05"/>
+    <material name="surface_mat" rgba="0.80 0.80 0.90 1" reflectance="0.2"/>
+  </asset>
+  <worldbody>
+    <light name="sun"  pos="0 0 4" dir="0 0 -1"
+           diffuse="0.9 0.9 0.9" castshadow="true"/>
+    <light name="fill" pos="1.5 -1.5 3" dir="-0.5 0.5 -1"
+           diffuse="0.4 0.4 0.5" castshadow="false"/>
+    <geom name="floor" type="plane" size="3 3 0.1" material="floor_mat" pos="0 0 0"/>
+    <geom name="table_top" type="box" size="0.3 0.2 0.020"
+          pos="0.5000 0.0000 0.4000" material="table_mat"/>
+    <geom name="table_leg0" type="box" size="0.02 0.02 0.1950"
+          pos="0.2200 -0.1800 0.1950" material="table_mat"/>
+    <geom name="table_leg1" type="box" size="0.02 0.02 0.1950"
+          pos="0.2200 0.1800 0.1950" material="table_mat"/>
+    <geom name="table_leg2" type="box" size="0.02 0.02 0.1950"
+          pos="0.7800 -0.1800 0.1950" material="table_mat"/>
+    <geom name="table_leg3" type="box" size="0.02 0.02 0.1950"
+          pos="0.7800 0.1800 0.1950" material="table_mat"/>
+    <geom name="shelf_lower" type="box" size="0.25 0.08 0.008"
+          pos="0.0000 0.6000 0.6800" material="shelf_mat"/>
+    <geom name="shelf_upper" type="box" size="0.25 0.08 0.008"
+          pos="0.0000 0.6000 0.9200" material="shelf_mat"/>
+    <geom name="shelf_left"  type="box" size="0.008 0.08 0.14"
+          pos="-0.2500 0.6000 0.8000" material="shelf_mat"/>
+    <geom name="shelf_right" type="box" size="0.008 0.08 0.14"
+          pos="0.2500 0.6000 0.8000" material="shelf_mat"/>
+    <geom name="shelf_back"  type="box" size="0.25 0.008 0.14"
+          pos="0.0000 0.6800 0.8000" material="shelf_mat"/>
+    <geom name="goal_slot" type="box" size="0.06 0.06 0.06"
+          pos="0.0000 0.5800 0.8000" material="goal_mat"/>
+    <geom name="object" type="box" size="0.025 0.025 0.025"
+          pos="0.5000 0.0000 0.6500" material="object_mat"/>
+    <geom name="object_tag" type="box" size="0.012 0.012 0.001"
+          pos="0.5000 -0.0260 0.6500" rgba="0.1 0.1 0.1 1"/>
+  </worldbody>
+  <include file="/sessions/optimistic-laughing-bardeen/mnt/teach-once/src/gpt_repro/envs/assets/franka/panda_with_site.xml"/>
+</mujoco>
