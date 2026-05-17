@@ -14,6 +14,8 @@ const ModeCleaning = (() => {
   let currentTilt = 0;
   let currentMess = 'scatter';
   let isRunning   = false;
+  let drawnPath   = [];
+  let isDrawing   = false;
 
   // Source keypoints: 8 points on flat table surface — Three.js Y-up
   const S_FLAT = [
@@ -124,8 +126,27 @@ const ModeCleaning = (() => {
 
     document.getElementById('panel-body').innerHTML = `
       <div class="drag-instructions">
-        <p>🧹 Pick a mess shape, then tilt the surface.</p>
-        <p>TP-GPT adapts the raster-scan path — watch the spill disappear.</p>
+        <p>🧹 Draw your own path or pick a default, then tilt the surface.</p>
+        <p>TP-GPT transports the path to the new surface shape.</p>
+      </div>
+
+      <div class="draw-mode-group">
+        <div class="draw-toggle-row">
+          <span class="draw-mode-label">Path source:</span>
+          <div class="surface-selector" id="clean-path-source">
+            <button class="surface-btn active" data-source="default">Default scan</button>
+            <button class="surface-btn"        data-source="draw">Draw your own</button>
+          </div>
+        </div>
+        <div id="draw-controls" style="display:none;">
+          <div class="draw-instructions-active">
+            <p>✏️ Click and drag on the 3D scene to draw your cleaning path on the table.</p>
+          </div>
+          <div class="draw-status-row">
+            <span id="drawn-count" class="drawn-count">0 points drawn</span>
+            <button id="btn-clear-path" class="btn-tertiary">Clear ✕</button>
+          </div>
+        </div>
       </div>
 
       <div class="slider-group">
@@ -157,6 +178,41 @@ const ModeCleaning = (() => {
   // Listeners
   // ---------------------------------------------------------------------------
   function setupListeners() {
+    // Path source toggle: Default scan ↔ Draw your own
+    document.querySelectorAll('#clean-path-source .surface-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        document.querySelectorAll('#clean-path-source .surface-btn')
+          .forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        const src = e.currentTarget.dataset.source;
+        const drawControls = document.getElementById('draw-controls');
+        if (src === 'draw') {
+          if (drawControls) drawControls.style.display = 'block';
+          startDrawing();
+        } else {
+          if (drawControls) drawControls.style.display = 'none';
+          stopDrawing();
+          drawnPath = [];
+          Scene.clearPath();
+          updateDrawCount();
+          // Re-enable generalize (default scan always ready)
+          const btn2 = document.getElementById('btn-generalize');
+          if (btn2 && !isRunning) btn2.disabled = false;
+        }
+      });
+    });
+
+    // Clear drawn path — wipe spill canvas back to blank so user can redraw
+    document.getElementById('btn-clear-path')
+      ?.addEventListener('click', () => {
+        drawnPath = [];
+        Scene.clearPath();
+        Scene.clearSpillCanvas();
+        updateDrawCount();
+        const btn2 = document.getElementById('btn-generalize');
+        if (btn2) btn2.disabled = true;
+      });
+
     // Mess shape selector
     document.querySelectorAll('#clean-mess-selector .surface-btn').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -185,6 +241,73 @@ const ModeCleaning = (() => {
         updateTransportPreview();
       });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Freehand drawing
+  // ---------------------------------------------------------------------------
+  function startDrawing() {
+    isDrawing = true;
+    drawnPath = [];
+    Scene.clearPath();
+    Scene.clearSpillCanvas();   // remove the blob mess — the drawn path IS the mess
+    updateDrawCount();
+    Scene.enableDrawing(onDrawPoint);
+    // Disable generalize until 3+ points
+    const btn = document.getElementById('btn-generalize');
+    if (btn) btn.disabled = true;
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+    Scene.disableDrawing();
+    // Restore a default mess when leaving draw mode
+    Scene.clearPath();
+    Scene.resetSpillCanvas(MESS_PRESETS[currentMess].drawType);
+  }
+
+  function onDrawPoint(pt) {
+    drawnPath.push(pt);
+    // Paint path onto the spill canvas (same look as the blob mess)
+    Scene.drawSpillPath(drawnPath);
+    // Also show a subtle 3D line so depth/position is legible on the surface
+    if (drawnPath.length >= 2) Scene.drawPath(drawnPath, 0xcc3300);
+    updateDrawCount();
+    if (drawnPath.length >= 3) {
+      const btn = document.getElementById('btn-generalize');
+      if (btn && !isRunning) btn.disabled = false;
+    }
+  }
+
+  function updateDrawCount() {
+    const el = document.getElementById('drawn-count');
+    if (el) {
+      el.textContent = drawnPath.length > 0
+        ? `${drawnPath.length} points drawn` : '0 points drawn';
+      el.style.color = drawnPath.length >= 3
+        ? 'var(--success)' : 'var(--text-dim)';
+    }
+  }
+
+  function downsamplePath(pts, maxPts) {
+    if (pts.length <= maxPts) return pts;
+    const step = (pts.length - 1) / (maxPts - 1);
+    return Array.from({ length: maxPts }, (_, i) => pts[Math.round(i * step)]);
+  }
+
+  function buildDrawnPhases(totalPoints) {
+    // totalPoints = fullPath.length = nWaypoints + 2 (approach + retreat)
+    // Segment count = totalPoints - 1
+    const n = totalPoints - 1;
+    const APPROACH_STEPS = 18;
+    const RETREAT_STEPS  = 18;
+    const midSteps = Math.max(8, Math.round(200 / Math.max(1, n - 2)));
+    const phases = [{ label: 'APPROACH', steps: APPROACH_STEPS }];
+    for (let i = 1; i < n - 1; i++) {
+      phases.push({ label: `STROKE ${i}`, steps: midSteps });
+    }
+    phases.push({ label: 'RETREAT', steps: RETREAT_STEPS });
+    return phases;
   }
 
   function updateConfigText() {
@@ -268,10 +391,17 @@ const ModeCleaning = (() => {
 
     try {
       const preset = MESS_PRESETS[currentMess];
+
+      // Use freehand drawn path if in draw mode with enough points
+      const useDrawn = isDrawing && drawnPath.length >= 3;
+      const sourceWaypoints = useDrawn
+        ? downsamplePath(drawnPath, 12)
+        : preset.waypoints;
+
       const T = getSurfaceKeypoints(currentTilt);
       const transport = new TPGPTTransport();
       transport.fit(S_FLAT, T);
-      const transported = transport.transform(preset.waypoints);
+      const transported = transport.transform(sourceWaypoints);
 
       // Clamp all waypoint y-values so the arm never goes through the table (y < 0.780).
       const MIN_Y = 0.780;
@@ -286,18 +416,22 @@ const ModeCleaning = (() => {
         [last[0],  last[1]  + 0.12, last[2]],
       ];
 
-      const { positions, labels } = interpolateWaypoints(fullPath, preset.phases);
+      // Build phases for drawn path (n-1 segments + approach/retreat)
+      const phases = useDrawn
+        ? buildDrawnPhases(fullPath.length)
+        : preset.phases;
 
-      const u = transport.getUncertainty(preset.waypoints);
+      const { positions, labels } = interpolateWaypoints(fullPath, phases);
+
+      const u = transport.getUncertainty(sourceWaypoints);
       const meanSigma = u.reduce((s, v) => s + v, 0) / u.length;
 
-      // Mean Euclidean displacement of waypoints due to transport (metres → mm display)
-      const pathShift = preset.waypoints.reduce((sum, wp, i) => {
+      const pathShift = sourceWaypoints.reduce((sum, wp, i) => {
         const tp = transported[i];
         return sum + Math.sqrt(
           (tp[0]-wp[0])**2 + (tp[1]-wp[1])**2 + (tp[2]-wp[2])**2
         );
-      }, 0) / preset.waypoints.length;
+      }, 0) / sourceWaypoints.length;
 
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectoryClean(positions, labels, 30);
@@ -365,6 +499,8 @@ const ModeCleaning = (() => {
   // Reset
   // ---------------------------------------------------------------------------
   function reset() {
+    stopDrawing();
+    drawnPath   = [];
     isRunning   = false;
     currentTilt = 0;
     currentMess = 'scatter';

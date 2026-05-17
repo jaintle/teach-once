@@ -47,7 +47,7 @@ Three interactive modes:
 | Mode | What you do | What TP-GPT does |
 |------|------------|-----------------|
 | **Reshelving** | Drag the box and shelf to new positions | Transports the pick-place demo to the new layout |
-| **Cleaning** | Draw a path on the table, morph the surface | Transports your path to the deformed surface |
+| **Cleaning** | Draw a freehand path on the table (or use default raster scan), then select a surface shape | Transports your drawn path to the deformed surface |
 | **Arm-pose** | Drag shoulder/elbow/wrist/hand spheres | Transports the tracing path to the new arm config |
 
 ---

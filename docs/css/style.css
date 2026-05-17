@@ -1768,3 +1768,58 @@ section {
   text-align: center;
   margin: 0;
 }
+
+/* ── Freehand drawing (cleaning mode) ─────────────────────── */
+.draw-mode-group {
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.draw-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.draw-mode-label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.draw-instructions-active p {
+  font-size: 0.82rem;
+  color: var(--accent);
+  margin: 0;
+  font-style: italic;
+}
+.draw-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2px;
+}
+.drawn-count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+.btn-tertiary {
+  background: transparent;
+  border: 1px solid var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.btn-tertiary:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}

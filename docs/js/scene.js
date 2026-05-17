@@ -11,6 +11,10 @@ const Scene = (() => {
   // Private state
   // ---------------------------------------------------------------------------
   let renderer, camera, threeScene, controls;
+
+  // Drawing state (freehand path, cleaning mode)
+  let _drawingEnabled = false;
+  let _onDrawPoint    = null;
   let armGroup, tableGroup, shelfGroup, objectMesh, eeSphere;
   let joints = [];  // 7 THREE.Group pivot points
   let animationId = null;
@@ -454,6 +458,54 @@ const Scene = (() => {
 
     // Draw one frame immediately so canvas is never black during first load
     renderer.render(threeScene, camera);
+
+    // Freehand drawing — mouse + touch handlers
+    let _isMouseDown   = false;
+    let _lastDrawPoint = null;
+    const MIN_DRAW_DIST = 0.025;
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (!_drawingEnabled) return;
+      _isMouseDown = true;
+      const pt = canvasToTablePos(e, canvas, camera);
+      if (pt && _onDrawPoint) { _onDrawPoint(pt); _lastDrawPoint = pt; }
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (!_drawingEnabled || !_isMouseDown) return;
+      const pt = canvasToTablePos(e, canvas, camera);
+      if (!pt) return;
+      if (_lastDrawPoint) {
+        const d = Math.sqrt(
+          (pt[0]-_lastDrawPoint[0])**2 + (pt[2]-_lastDrawPoint[2])**2);
+        if (d < MIN_DRAW_DIST) return;
+      }
+      if (_onDrawPoint) _onDrawPoint(pt);
+      _lastDrawPoint = pt;
+    });
+    canvas.addEventListener('mouseup',    () => { _isMouseDown = false; _lastDrawPoint = null; });
+    canvas.addEventListener('mouseleave', () => { _isMouseDown = false; });
+
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (!_drawingEnabled) return;
+      _isMouseDown = true;
+      const pt = canvasToTablePos(e.touches[0], canvas, camera);
+      if (pt && _onDrawPoint) { _onDrawPoint(pt); _lastDrawPoint = pt; }
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (!_drawingEnabled || !_isMouseDown) return;
+      const pt = canvasToTablePos(e.touches[0], canvas, camera);
+      if (!pt) return;
+      if (_lastDrawPoint) {
+        const d = Math.sqrt(
+          (pt[0]-_lastDrawPoint[0])**2 + (pt[2]-_lastDrawPoint[2])**2);
+        if (d < MIN_DRAW_DIST) return;
+      }
+      if (_onDrawPoint) _onDrawPoint(pt);
+      _lastDrawPoint = pt;
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { _isMouseDown = false; });
 
     // Start idle
     startIdle();
@@ -1143,6 +1195,119 @@ const Scene = (() => {
     if (renderer && threeScene && camera) renderer.render(threeScene, camera);
   }
 
+  // ---------------------------------------------------------------------------
+  // Spill canvas helpers (used by draw mode)
+  // ---------------------------------------------------------------------------
+
+  // Clears the spill canvas to transparent so draw-mode starts with a clean table.
+  function clearSpillCanvas() {
+    if (!_spillCtx || !_spillTex) return;
+    _spillCtx.globalCompositeOperation = 'source-over';
+    _spillCtx.clearRect(0, 0, 256, 256);
+    _spillInitialPixels = 0;
+    _spillTex.needsUpdate = true;
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
+  }
+
+  // Renders the user's drawn world-space path onto the spill canvas as a
+  // coffee-stain stroke.  Replaces any previous drawn path each call so it
+  // can be called incrementally while the user is still drawing.
+  // worldPoints: Array of [x, y, z] in Three.js Y-up world coordinates.
+  function drawSpillPath(worldPoints) {
+    if (!_spillCtx || !_spillTex) return;
+    if (!worldPoints || worldPoints.length < 1) return;
+
+    _spillCtx.globalCompositeOperation = 'source-over';
+    _spillCtx.clearRect(0, 0, 256, 256);
+
+    // World → canvas  (same mapping used by the erase pass in playTrajectoryClean)
+    const pts = worldPoints.map(p => ({
+      u: Math.max(4, Math.min(252, ((p[0] - 0.25) / 0.50) * 256)),
+      v: Math.max(4, Math.min(252, ((p[2] + 0.175) / 0.35) * 256)),
+    }));
+
+    if (pts.length === 1) {
+      // Single point: draw as a blob
+      const g = _spillCtx.createRadialGradient(pts[0].u, pts[0].v, 0, pts[0].u, pts[0].v, 26);
+      g.addColorStop(0,   'rgba(160,70,10,0.92)');
+      g.addColorStop(0.5, 'rgba(140,55, 5,0.75)');
+      g.addColorStop(1,   'rgba(120,40, 0,0)');
+      _spillCtx.fillStyle = g;
+      _spillCtx.beginPath();
+      _spillCtx.arc(pts[0].u, pts[0].v, 26, 0, Math.PI * 2);
+      _spillCtx.fill();
+    } else {
+      // Wide feathered halo (soft outer edge)
+      _spillCtx.save();
+      _spillCtx.lineCap  = 'round';
+      _spillCtx.lineJoin = 'round';
+      _spillCtx.globalAlpha = 0.38;
+      _spillCtx.strokeStyle = 'rgba(130,50,5,1)';
+      _spillCtx.lineWidth = 50;
+      _spillCtx.beginPath();
+      _spillCtx.moveTo(pts[0].u, pts[0].v);
+      for (let i = 1; i < pts.length; i++) _spillCtx.lineTo(pts[i].u, pts[i].v);
+      _spillCtx.stroke();
+      _spillCtx.restore();
+
+      // Main opaque stroke
+      _spillCtx.save();
+      _spillCtx.lineCap  = 'round';
+      _spillCtx.lineJoin = 'round';
+      _spillCtx.globalAlpha = 0.90;
+      _spillCtx.strokeStyle = 'rgba(155,62,8,1)';
+      _spillCtx.lineWidth = 28;
+      _spillCtx.beginPath();
+      _spillCtx.moveTo(pts[0].u, pts[0].v);
+      for (let i = 1; i < pts.length; i++) _spillCtx.lineTo(pts[i].u, pts[i].v);
+      _spillCtx.stroke();
+      _spillCtx.restore();
+    }
+
+    // Recount opaque pixels so getSpillCoverage() measures against the drawn path.
+    const d = _spillCtx.getImageData(0, 0, 256, 256).data;
+    _spillInitialPixels = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 10) _spillInitialPixels++;
+
+    _spillTex.needsUpdate = true;
+    if (renderer && threeScene && camera) renderer.render(threeScene, camera);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Freehand drawing helpers
+  // ---------------------------------------------------------------------------
+
+  function canvasToTablePos(event, cvs, cam) {
+    const rect = cvs.getBoundingClientRect();
+    const x =  ((event.clientX - rect.left) / rect.width)  *  2 - 1;
+    const y = -((event.clientY - rect.top)  / rect.height)  *  2 + 1;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(x, y), cam);
+    // Table surface sits at y ≈ 0.755 in Three.js Y-up
+    const tablePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.755);
+    const target = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(tablePlane, target)) return null;
+    // Clamp to table bounds (x ∈ [0.22, 0.78], z ∈ [-0.18, 0.18])
+    target.x = Math.max(0.22, Math.min(0.78, target.x));
+    target.z = Math.max(-0.18, Math.min(0.18, target.z));
+    target.y = 0.775; // slightly above surface
+    return [target.x, target.y, target.z];
+  }
+
+  function enableDrawing(onDrawPoint) {
+    _drawingEnabled = true;
+    _onDrawPoint    = onDrawPoint;
+    if (canvas) canvas.style.cursor = 'crosshair';
+    if (controls) controls.enabled = false;
+  }
+
+  function disableDrawing() {
+    _drawingEnabled = false;
+    _onDrawPoint    = null;
+    if (canvas) canvas.style.cursor = 'grab';
+    if (controls) controls.enabled = true;
+  }
+
   return {
     init,
     loadScene,
@@ -1159,10 +1324,15 @@ const Scene = (() => {
     updateSurfaceMesh,
     getSpillCoverage,
     resetSpillCanvas,
+    clearSpillCanvas,
+    drawSpillPath,
     updateKeypointSpheres,
     flashKeypoint,
     playTrajectoryClean,
     playTrajectoryArmpose,
+    enableDrawing,
+    disableDrawing,
+    get camera() { return camera; },
     // expose for debugging
     get joints() { return joints; },
     get objectMesh() { return objectMesh; },

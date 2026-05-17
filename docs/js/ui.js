@@ -34,6 +34,9 @@ function switchMode(mode) {
   const badge = document.getElementById('mode-badge');
   if (badge) badge.textContent = modeNames[mode] || mode;
 
+  // Stop any active freehand drawing before resetting scene
+  try { Scene.disableDrawing(); } catch (e) { /* ignore */ }
+
   // Reset scene geometry + clear overlays, then load new scene
   try { Scene.resetScene(); } catch (e) { console.warn('[ui] resetScene error:', e); }
   try { Scene.loadScene(mode); } catch (e) { console.warn('[ui] loadScene error:', e); }
