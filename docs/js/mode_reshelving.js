@@ -27,7 +27,7 @@ const ModeReshelving = (() => {
   // ---------------------------------------------------------------------------
   function init() {
     renderControlPanel();
-    setupListeners();
+    if (!isMobile()) setupListeners(); // sliders don't exist in mobile panel — null would throw
     updateMetrics(null);
     updatePhaseBadge('READY');
   }
@@ -44,10 +44,10 @@ const ModeReshelving = (() => {
   // Mobile-only panel: preset buttons that auto-trigger generalize
   // ---------------------------------------------------------------------------
   const MOBILE_PRESETS = [
-    { label: 'Box · left',   bx: 0.28, bz: 0.00, sy: 0.90, sz: -0.70 },
-    { label: 'Box · right',  bx: 0.72, bz: 0.00, sy: 0.90, sz: -0.70 },
-    { label: 'High shelf',   bx: 0.50, bz: 0.00, sy: 1.05, sz: -0.65 },
-    { label: 'Shelf closer', bx: 0.50, bz: 0.15, sy: 0.90, sz: -0.58 },
+    { label: 'Box · near',  bx: 0.50, bz:  0.15, sy: 0.90, sz: -0.70 },
+    { label: 'Box · far',   bx: 0.50, bz: -0.15, sy: 0.90, sz: -0.70 },
+    { label: 'High shelf',  bx: 0.50, bz:  0.00, sy: 1.05, sz: -0.65 },
+    { label: 'Low shelf',   bx: 0.50, bz:  0.00, sy: 0.82, sz: -0.70 },
   ];
 
   function renderMobilePanel() {

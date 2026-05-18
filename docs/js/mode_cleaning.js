@@ -154,8 +154,9 @@ const ModeCleaning = (() => {
         currentTilt = p.tilt;
         drawnPath   = [];
 
-        // Update scene to show new surface shape before Generalize is tapped
+        // Update scene to show new surface shape and refresh the spill canvas
         Scene.updateSurfaceMesh({ type: p.tilt > 0 ? 'tilt' : 'flat', tilt: p.tilt });
+        Scene.resetSpillCanvas(p.mess);
         updateTransportPreview();
 
         // Enable Generalize button — user taps it when ready
