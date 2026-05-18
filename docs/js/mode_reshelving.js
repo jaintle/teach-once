@@ -204,10 +204,12 @@ const ModeReshelving = (() => {
       );
 
       // Play trajectory in 3D scene.
-      // Box is frozen to transported[4] automatically on the first PLACE frame —
-      // no post-hoc setObjectPos needed (that was causing the visible "sinking" snap).
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectory(positions, phaseLabels, 40);
+
+      // Pin box to exact shelf surface. The idle tick no longer touches objectMesh.position,
+      // so this single call is authoritative — no subsequent override can undo it.
+      Scene.setObjectPos([0.5, PLACE_Y, shelfZ]);
 
       hasPlaced = true;
       updatePhaseBadge('DONE ✓');

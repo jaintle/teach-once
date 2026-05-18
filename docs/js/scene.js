@@ -352,11 +352,6 @@ const Scene = (() => {
     angles[5] += Math.sin(t * 0.55) * 0.025;
     setArmPose(angles);
 
-    // Subtle box hover (y oscillation, cosmetic only)
-    if (objectMesh) {
-      objectMesh.position.y = 0.785 + Math.sin(t * 0.8) * 0.0025;
-    }
-
     controls.update();
     renderer.render(threeScene, camera);
     animationId = requestAnimationFrame(idleTick);
@@ -920,12 +915,6 @@ const Scene = (() => {
 
     // Warm-start IK from current arm pose
     let currentAngles = [...HOME_ANGLES];
-    // Two-state flags: wasInCarry becomes true once CARRY starts;
-    // boxReleased becomes true the moment we leave CARRY for the first time.
-    // This ensures the release-snap only fires at the CARRY→PLACE transition,
-    // not at the start of APPROACH (which would yank the box off the table).
-    let wasInCarry  = false;
-    let boxReleased = false;
 
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
@@ -938,19 +927,11 @@ const Scene = (() => {
       // Update mode badge
       if (badge && label) badge.textContent = 'Reshelving · ' + label;
 
-      if (objectMesh) {
-        if (label === 'GRASP' || label === 'LIFT' || label === 'CARRY') {
-          // Box follows arm: gripped, lifted, carried to shelf.
-          objectMesh.position.set(pos[0], pos[1], pos[2]);
-          if (label === 'CARRY') wasInCarry = true;
-        } else if (wasInCarry && !boxReleased) {
-          // First frame after CARRY ended (first PLACE frame).
-          // pos here == transported[4] exactly (alpha=0 of PLACE segment).
-          // Pin the box to this position and freeze — arm retreats, box stays.
-          objectMesh.position.set(pos[0], pos[1], pos[2]);
-          boxReleased = true;
-        }
-        // APPROACH / subsequent PLACE / RETREAT: box position unchanged.
+      // Box follows arm during pickup and carry.
+      // During APPROACH the arm is descending to the box — box stays on table.
+      // During PLACE/RETREAT the arm lifts away — box stays on the shelf.
+      if (objectMesh && (label === 'GRASP' || label === 'LIFT' || label === 'CARRY')) {
+        objectMesh.position.set(pos[0], pos[1], pos[2]);
       }
 
       controls.update();
