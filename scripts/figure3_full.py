@@ -7,7 +7,7 @@ with ``transform_fn = PolicyTransport.transform``.
 Saves ``reports/figures/phase4_fig3_full.png``. Phase 3's
 ``phase3_fig3_partial.png`` is left in place.
 
-CLI flags (per CLAUDE.md):
+CLI flags (with defaults):
 
 * ``--seed``              RNG seed (default 0)
 * ``--n_source_points``   number of paired (S, T) points (default 18)

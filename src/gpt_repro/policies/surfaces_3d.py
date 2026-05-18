@@ -5,8 +5,7 @@ for the 3D surface cleaning experiment. All surfaces span roughly
 0.3 m × 0.3 m in the XY plane.
 
 Paper grounding: Sec. VI-C "Robot Surface Cleaning" — depth-camera
-point clouds replaced by procedural generation (scope note in CLAUDE.md:
-'No point-cloud SVGP for the cleaning task at 3D scale (paper Sec. VI-C);
+point clouds replaced by procedural generation;
 we only do the 2D version in Sec. V-A.').
 This module extends that note to provide a 3D analog.
 """

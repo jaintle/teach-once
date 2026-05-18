@@ -19,7 +19,7 @@ deviation** field via the L2 norm of the std vector at each grid point:
 This matches the Fig. 6 caption ("norm of the velocity") and makes
 the three panels directly comparable on a common color / z scale.
 
-CLI flags (per CLAUDE.md):
+CLI flags (with defaults):
 
 * ``--seed``     RNG seed (default 0)
 * ``--n_grid``   resolution per axis of the (G × G) field (default 30)

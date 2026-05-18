@@ -1,8 +1,7 @@
 """Global seeding utility.
 
 Used everywhere a stochastic operation (numpy sampling, torch initialization,
-GP variational optimization) is performed. Required by the reproducibility
-rules in ``CLAUDE.md``.
+GP variational optimization) is performed.
 
 This module does not implement any equation from the paper; it exists only
 to make experiments deterministic across runs.
@@ -29,7 +28,6 @@ def set_global_seed(seed: int) -> None:
     -----
     Also sets ``PYTHONHASHSEED`` for hash-based determinism in spawned
     subprocesses and toggles cuDNN to its deterministic algorithms.
-    Reproducibility rule mandated by ``CLAUDE.md``.
     """
     if seed is None or int(seed) < 0:
         raise ValueError(f"seed must be a non-negative integer, got {seed!r}")

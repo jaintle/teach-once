@@ -19,7 +19,7 @@ Prints to stdout:
 * centroid shift  T̄ − S̄
 * mean residual   ‖T − γ(S)‖₂ / N
 
-CLI (per CLAUDE.md):
+CLI flags (with defaults):
 
 * ``--seed``             RNG seed (default 0)
 * ``--n_source_points``  number of paired source/target points (default 18)

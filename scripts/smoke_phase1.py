@@ -5,7 +5,7 @@ Fits an :class:`ExactGPRegressor` and an :class:`SVGPRegressor` to a noisy
 ``reports/figures/phase1_gp_demo.png``. Prints train/test RMSE and a
 one-line ``PHASE1 SMOKE: PASS`` / ``FAIL`` summary.
 
-CLI flags (per CLAUDE.md):
+CLI flags (defaults in parentheses):
 
 * ``--seed``      RNG seed (default 0)
 * ``--out_dir``   figure directory (default ``reports/figures/``)

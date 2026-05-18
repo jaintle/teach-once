@@ -16,7 +16,7 @@ query point (equivalently :math:`\\sqrt{\\mathrm{trace}(\\Sigma)}`).
 Phase-4 output ``phase4_fig5_scheme.png`` is not touched; this script
 now writes ``phase5_fig5_full.png``.
 
-CLI flags (per CLAUDE.md):
+CLI flags (with defaults):
 
 * ``--seed``       RNG seed (default 0)
 * ``--n_demos``    number of demo samples (default 60)

@@ -14,7 +14,7 @@ it out from the first demo state, and saves two figures:
 Prints train RMSE, the rollout's closest approach to the demo endpoint,
 the on-demo / out-of-distribution std ratio, and a one-line PASS/FAIL.
 
-CLI flags (per CLAUDE.md):
+CLI flags (defaults in parentheses):
 
 * ``--seed``      RNG seed (default 0)
 * ``--out_dir``   figure directory (default ``reports/figures/``)

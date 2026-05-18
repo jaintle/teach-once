@@ -21,8 +21,7 @@ Observation space (20D):
 Action space (9D):
     [x_desired (3), xdot_desired (3), diag_K (3)]
 
-Note: the CLAUDE.md spec says obs=(16,) but the listed components
-3+3+7+7=20.  This implementation uses 20D to be consistent.
+Note: this implementation uses 20D to be consistent.
 """
 
 from __future__ import annotations
