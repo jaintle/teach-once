@@ -16,6 +16,7 @@ const ModeCleaning = (() => {
   let isRunning   = false;
   let drawnPath   = [];
   let isDrawing   = false;
+  let _genId      = 0;
 
   // Source keypoints: 8 points on flat table surface — Three.js Y-up
   const S_FLAT = [
@@ -114,9 +115,61 @@ const ModeCleaning = (() => {
   }
 
   // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  function isMobile() { return window.innerWidth <= 768; }
+
+  // Mobile preset combos: mess shape + tilt angle — auto-generalize on tap
+  const MOBILE_CLEAN_PRESETS = [
+    { label: 'Scatter\nflat',   mess: 'scatter', tilt: 0  },
+    { label: 'Scatter\ntilted', mess: 'scatter', tilt: 8  },
+    { label: 'Puddle\ntilted',  mess: 'puddle',  tilt: 6  },
+    { label: 'Line\nspill',     mess: 'line',    tilt: 10 },
+  ];
+
+  function renderMobilePanel() {
+    document.getElementById('panel-body').innerHTML = `
+      <p class="mobile-note">
+        🖥️ Draw your own path and tilt the surface on desktop — tap a preset below:
+      </p>
+      <div class="mobile-preset-grid" id="mobile-presets-cleaning">
+        ${MOBILE_CLEAN_PRESETS.map((p, i) => `
+          <button class="mobile-preset-btn" data-idx="${i}"
+                  style="white-space:pre-line">${p.label}</button>
+        `).join('')}
+      </div>
+    `;
+
+    document.querySelectorAll('#mobile-presets-cleaning .mobile-preset-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        if (isRunning) return;
+        const p = MOBILE_CLEAN_PRESETS[parseInt(e.currentTarget.dataset.idx)];
+
+        document.querySelectorAll('#mobile-presets-cleaning .mobile-preset-btn')
+          .forEach(b => b.classList.remove('running'));
+        e.currentTarget.classList.add('running');
+
+        // Apply state
+        currentMess = p.mess;
+        currentTilt = p.tilt;
+        drawnPath   = [];
+
+        // Update scene to show new surface shape before Generalize is tapped
+        Scene.updateSurfaceMesh({ type: p.tilt > 0 ? 'tilt' : 'flat', tilt: p.tilt });
+        updateTransportPreview();
+
+        // Enable Generalize button — user taps it when ready
+        const genBtn = document.getElementById('btn-generalize');
+        if (genBtn) genBtn.disabled = false;
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Control panel HTML — mess selector + tilt slider
   // ---------------------------------------------------------------------------
   function renderControlPanel() {
+    if (isMobile()) { renderMobilePanel(); return; }
     const messHTML = Object.keys(MESS_PRESETS).map(key => `
       <button class="surface-btn${key === currentMess ? ' active' : ''}"
               data-mess="${key}">
@@ -385,6 +438,7 @@ const ModeCleaning = (() => {
   async function generalize() {
     if (isRunning) return;
     isRunning = true;
+    const myId = ++_genId;
 
     const btn = document.getElementById('btn-generalize');
     if (btn) { btn.disabled = true; btn.textContent = 'Computing…'; }
@@ -436,18 +490,32 @@ const ModeCleaning = (() => {
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectoryClean(positions, labels, 30);
 
+      if (_genId !== myId) return; // cancelled by mode switch
+
       // Coverage = fraction of spill actually erased from the canvas
       const coverage = Scene.getSpillCoverage();
       updateMetrics({ sigma: meanSigma, pathShift, coverage });
       updatePhaseBadge('DONE ✓');
     } catch (e) {
-      console.error('[cleaning] generalize error:', e);
-      updatePhaseBadge('ERROR');
+      if (_genId === myId) {
+        console.error('[cleaning] generalize error:', e);
+        updatePhaseBadge('ERROR');
+      }
     } finally {
-      isRunning = false;
-      const btn2 = document.getElementById('btn-generalize');
-      if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      if (_genId === myId) {
+        isRunning = false;
+        const btn2 = document.getElementById('btn-generalize');
+        if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cancel — called by ui.js on mode switch
+  // ---------------------------------------------------------------------------
+  function cancel() {
+    _genId++;
+    isRunning = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -521,5 +589,5 @@ const ModeCleaning = (() => {
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
-  return { init, generalize, reset };
+  return { init, generalize, reset, cancel };
 })();

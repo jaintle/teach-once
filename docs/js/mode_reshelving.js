@@ -20,6 +20,7 @@ const ModeReshelving = (() => {
   let hasBeenDragged = false;
   let isRunning = false;
   let hasPlaced = false;  // true after first successful generalize — sliders snap box back to table
+  let _genId = 0;         // incremented on cancel() to abort stale async generalize()
 
   // ---------------------------------------------------------------------------
   // Init
@@ -34,7 +35,72 @@ const ModeReshelving = (() => {
   // ---------------------------------------------------------------------------
   // Control panel HTML
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  function isMobile() { return window.innerWidth <= 768; }
+
+  // ---------------------------------------------------------------------------
+  // Mobile-only panel: preset buttons that auto-trigger generalize
+  // ---------------------------------------------------------------------------
+  const MOBILE_PRESETS = [
+    { label: 'Box · left',   bx: 0.28, bz: 0.00, sy: 0.90, sz: -0.70 },
+    { label: 'Box · right',  bx: 0.72, bz: 0.00, sy: 0.90, sz: -0.70 },
+    { label: 'High shelf',   bx: 0.50, bz: 0.00, sy: 1.05, sz: -0.65 },
+    { label: 'Shelf closer', bx: 0.50, bz: 0.15, sy: 0.90, sz: -0.58 },
+  ];
+
+  function renderMobilePanel() {
+    document.getElementById('panel-body').innerHTML = `
+      <p class="mobile-note">
+        🖥️ Full drag controls on desktop — tap a preset below to see TP-GPT generalize live:
+      </p>
+      <div class="mobile-preset-grid" id="mobile-presets-reshelving">
+        ${MOBILE_PRESETS.map((p, i) => `
+          <button class="mobile-preset-btn" data-idx="${i}">${p.label}</button>
+        `).join('')}
+      </div>
+      <div class="config-summary" id="config-summary">
+        <span class="config-label">Configuration:</span>
+        <span class="config-value" id="config-text">Tap a preset above</span>
+      </div>
+    `;
+
+    document.querySelectorAll('#mobile-presets-reshelving .mobile-preset-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        if (isRunning) return;
+        const p = MOBILE_PRESETS[parseInt(e.currentTarget.dataset.idx)];
+
+        // Highlight selected preset
+        document.querySelectorAll('#mobile-presets-reshelving .mobile-preset-btn')
+          .forEach(b => b.classList.remove('running'));
+        e.currentTarget.classList.add('running');
+
+        // Update state
+        boxX = p.bx; boxZ = p.bz; shelfY = p.sy; shelfZ = p.sz;
+        hasBeenDragged = true;
+        hasPlaced = false;
+
+        // Snap scene to new configuration so the user sees it before they hit Generalize
+        Scene.setObjectPos([boxX, 0.785, boxZ]);
+        Scene.setShelfPos([0.5, shelfY, shelfZ]);
+
+        const configEl = document.getElementById('config-text');
+        if (configEl) configEl.textContent =
+          `Box: (${boxX.toFixed(2)}, ${boxZ.toFixed(2)})  Shelf: h=${shelfY.toFixed(2)}, d=${shelfZ.toFixed(2)}`;
+
+        // Enable Generalize button — user taps it when ready
+        const genBtn = document.getElementById('btn-generalize');
+        if (genBtn) genBtn.disabled = false;
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Control panel HTML
+  // ---------------------------------------------------------------------------
   function renderControlPanel() {
+    if (isMobile()) { renderMobilePanel(); return; }
     document.getElementById('panel-body').innerHTML = `
       <div class="drag-instructions">
         <p>🟠 Move the orange box to a new table position.</p>
@@ -154,6 +220,7 @@ const ModeReshelving = (() => {
   async function generalize() {
     if (isRunning) return;
     isRunning = true;
+    const myId = ++_genId; // cancellation token — cancel() increments _genId to invalidate this run
 
     const btn = document.getElementById('btn-generalize');
     if (btn) { btn.disabled = true; btn.textContent = 'Computing…'; }
@@ -207,6 +274,9 @@ const ModeReshelving = (() => {
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectory(positions, phaseLabels, 40);
 
+      // Bail out if cancel() was called while we were awaiting (mode switch)
+      if (_genId !== myId) return;
+
       // Pin box to exact shelf surface. The idle tick no longer touches objectMesh.position,
       // so this single call is authoritative — no subsequent override can undo it.
       Scene.setObjectPos([0.5, PLACE_Y, shelfZ]);
@@ -214,13 +284,26 @@ const ModeReshelving = (() => {
       hasPlaced = true;
       updatePhaseBadge('DONE ✓');
     } catch (e) {
-      console.error('[reshelving] generalize error:', e);
-      updatePhaseBadge('ERROR');
+      if (_genId === myId) {
+        console.error('[reshelving] generalize error:', e);
+        updatePhaseBadge('ERROR');
+      }
     } finally {
-      isRunning = false;
-      const btn2 = document.getElementById('btn-generalize');
-      if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      // Only clean up if this is still the active run (not superseded by cancel)
+      if (_genId === myId) {
+        isRunning = false;
+        const btn2 = document.getElementById('btn-generalize');
+        if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cancel — called by ui.js when switching modes; aborts any running generalize()
+  // ---------------------------------------------------------------------------
+  function cancel() {
+    _genId++;        // invalidates the current generalize() run
+    isRunning = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -329,5 +412,5 @@ const ModeReshelving = (() => {
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
-  return { init, generalize, reset };
+  return { init, generalize, reset, cancel };
 })();

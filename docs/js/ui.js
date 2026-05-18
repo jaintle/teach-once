@@ -18,6 +18,15 @@ let showingFallback = false;
 // ---------------------------------------------------------------------------
 function switchMode(mode) {
   if (mode === currentMode && !showingFallback) return;
+
+  // Cancel any in-flight generalize() on the departing mode so its async
+  // continuation doesn't overwrite the new mode's scene or badge.
+  try {
+    if (currentMode === 'reshelving' && typeof ModeReshelving !== 'undefined') ModeReshelving.cancel();
+    else if (currentMode === 'cleaning'   && typeof ModeCleaning   !== 'undefined') ModeCleaning.cancel();
+    else if (currentMode === 'armpose'    && typeof ModeArmpose    !== 'undefined') ModeArmpose.cancel();
+  } catch (e) { /* ignore */ }
+
   currentMode = mode;
 
   // Update tab active state

@@ -1036,6 +1036,63 @@ body.loaded .hero__scroll-hint {
   }
 }
 
+/* Mobile: shrink canvas overlays so they don't obscure the 3D scene */
+@media (max-width: 768px) {
+  .mode-badge {
+    font-size: 0.6rem;
+    padding: 2px 8px;
+  }
+  /* The "Three.js · TP-GPT inference" watermark isn't useful on a phone */
+  .render-info { display: none; }
+  .canvas-hint { font-size: 0.55rem; }
+}
+
+/* =============================================================================
+   MOBILE PRESET PANEL — shown only on mobile instead of sliders/drawing
+   ============================================================================= */
+.mobile-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.mobile-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.mobile-preset-btn {
+  padding: 10px var(--space-sm);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+  line-height: 1.35;
+}
+
+.mobile-preset-btn:hover,
+.mobile-preset-btn:active {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-border);
+}
+
+.mobile-preset-btn.running {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
 /* =============================================================================
    W3 — SLIDER CONTROLS + DRAG INSTRUCTIONS
    ============================================================================= */

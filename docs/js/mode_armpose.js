@@ -98,6 +98,7 @@ const ModeArmpose = (() => {
   // ---------------------------------------------------------------------------
   let kp = JSON.parse(JSON.stringify(DEFAULTS));
   let isRunning = false;
+  let _genId    = 0;
 
   // ---------------------------------------------------------------------------
   // Init
@@ -115,9 +116,49 @@ const ModeArmpose = (() => {
   }
 
   // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  function isMobile() { return window.innerWidth <= 768; }
+
+  function renderMobilePanel() {
+    const presetHTML = Object.keys(PRESETS).map(p => `
+      <button class="mobile-preset-btn${p === 'default' ? ' running' : ''}"
+              data-preset="${p}">
+        ${p.charAt(0).toUpperCase() + p.slice(1)}
+      </button>
+    `).join('');
+
+    document.getElementById('panel-body').innerHTML = `
+      <p class="mobile-note">
+        🖥️ Fine-tune each joint on desktop — tap a pose below to see TP-GPT adapt the path:
+      </p>
+      <div class="mobile-preset-grid" id="mobile-presets-armpose">
+        ${presetHTML}
+      </div>
+    `;
+
+    document.querySelectorAll('#mobile-presets-armpose .mobile-preset-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        if (isRunning) return;
+        document.querySelectorAll('#mobile-presets-armpose .mobile-preset-btn')
+          .forEach(b => b.classList.remove('running'));
+        e.currentTarget.classList.add('running');
+
+        // Apply pose preset — updates kp state and scene spheres
+        applyPreset(e.currentTarget.dataset.preset);
+
+        // Enable Generalize button — user taps it when ready
+        const genBtn = document.getElementById('btn-generalize');
+        if (genBtn) genBtn.disabled = false;
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Control panel HTML
   // ---------------------------------------------------------------------------
   function renderControlPanel() {
+    if (isMobile()) { renderMobilePanel(); return; }
     const names = ['shoulder', 'elbow', 'wrist', 'hand'];
 
     const kpHTML = names.map(name => `
@@ -283,6 +324,7 @@ const ModeArmpose = (() => {
   async function generalize() {
     if (isRunning) return;
     isRunning = true;
+    const myId = ++_genId;
 
     const btn = document.getElementById('btn-generalize');
     if (btn) { btn.disabled = true; btn.textContent = 'Computing…'; }
@@ -314,15 +356,29 @@ const ModeArmpose = (() => {
       if (btn) btn.textContent = 'Executing…';
       await Scene.playTrajectoryArmpose(positions, labels, 50);
 
+      if (_genId !== myId) return; // cancelled by mode switch
+
       updatePhaseBadge('DONE ✓');
     } catch (e) {
-      console.error('[armpose] generalize error:', e);
-      updatePhaseBadge('ERROR');
+      if (_genId === myId) {
+        console.error('[armpose] generalize error:', e);
+        updatePhaseBadge('ERROR');
+      }
     } finally {
-      isRunning = false;
-      const btn2 = document.getElementById('btn-generalize');
-      if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      if (_genId === myId) {
+        isRunning = false;
+        const btn2 = document.getElementById('btn-generalize');
+        if (btn2) { btn2.disabled = false; btn2.textContent = 'Generalize TP-GPT →'; }
+      }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cancel — called by ui.js on mode switch
+  // ---------------------------------------------------------------------------
+  function cancel() {
+    _genId++;
+    isRunning = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -379,5 +435,5 @@ const ModeArmpose = (() => {
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
-  return { init, generalize, reset };
+  return { init, generalize, reset, cancel };
 })();
