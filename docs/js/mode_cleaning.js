@@ -289,8 +289,8 @@ const ModeCleaning = (() => {
         const tv = document.getElementById('clean-tilt-val');
         if (tv) tv.textContent = currentTilt + '°';
         Scene.updateSurfaceMesh({ type: currentTilt > 0 ? 'tilted' : 'flat', tilt: currentTilt });
-        // Reset spill so user sees a fresh mess after changing tilt
-        Scene.resetSpillCanvas(MESS_PRESETS[currentMess].drawType);
+        // Only reset spill when not in draw mode — drawn paths should survive tilt changes
+        if (!isDrawing) Scene.resetSpillCanvas(MESS_PRESETS[currentMess].drawType);
         updateConfigText();
         updateTransportPreview();
       });
