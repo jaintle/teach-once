@@ -11,7 +11,7 @@
   Eqs. (13)–(15)
 - Transportation + epistemic uncertainty, Eqs. (16)–(18)
 - All 6 baselines: KMP, LE, E-RF, E-NN, E-NF, GP
-- Multi-frame benchmark (Sec. V-B): TP-GMM, HMM, DMP, GPT
+- Multi-frame benchmark (Sec. IV-B): TP-GMM, HMM, DMP, GPT
 - 3D MuJoCo kinematic analog: reshelving, arm-pose, cleaning
 
 ### Interactive web demo
@@ -22,6 +22,6 @@
 - Deployed on GitHub Pages
 
 ### Known simplifications vs paper
-- Sec. V-B: LQR replaced by greedy GMM rollout
-- Sec. VI: Impedance control replaced by kinematic IK
-- Sec. VI-B: Dressing replaced by arm-pose following
+- Sec. IV-B: LQR replaced by greedy GMM rollout
+- Sec. V: Impedance control replaced by kinematic IK
+- Sec. V-B: Dressing replaced by arm-pose following

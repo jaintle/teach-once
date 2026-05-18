@@ -326,7 +326,7 @@ class MultiOutputGP {
 }
 
 // =============================================================================
-// LINEAR TRANSPORT — Sec. IV-A, Eqs. (8)-(11) — Kabsch / Arun 1987
+// LINEAR TRANSPORT — Sec. III-E, Eqs. (8)-(11) — Kabsch / Arun 1987
 // =============================================================================
 class LinearTransport {
   constructor() {
@@ -401,7 +401,7 @@ class LinearTransport {
 }
 
 // =============================================================================
-// NONLINEAR RESIDUAL — Sec. IV-B, Eq. (12)
+// NONLINEAR RESIDUAL — Sec. III-E, Eq. (12)
 // GP fitted on residual: T - gamma(S)
 // =============================================================================
 class NonlinearResidual {
@@ -428,7 +428,7 @@ class NonlinearResidual {
 }
 
 // =============================================================================
-// TP-GPT TRANSPORT — Sec. IV, Eq. (7)
+// TP-GPT TRANSPORT — Sec. III-D, Eq. (7)
 // phi(x) = gamma(x) + psi(gamma(x))
 // =============================================================================
 class TPGPTTransport {

@@ -76,21 +76,21 @@ Three interactive modes:
 |---|---|---|
 | Sec. III-B | GP regression (exact + SVGP) | ✅ Full |
 | Sec. III-A | DS learning from demonstrations | ✅ Full |
-| Sec. IV-A | Linear transport via SVD (Eqs. 8–11) | ✅ Full |
-| Sec. IV-B | Non-linear GP transportation (Eq. 12) | ✅ Full |
-| Sec. IV-C | Velocity transport via Jacobian (Eq. 13) | ✅ Full |
-| Sec. IV-D | Orientation + stiffness transport (Eqs. 14–15) | ✅ Full |
-| Sec. IV-E | Uncertainty propagation (Eqs. 16–18) | ✅ Full |
-| Sec. V-A | 2D surface cleaning comparison + Fig. 7 | ✅ Full |
-| Sec. V-B | Multi-frame benchmark + Figs. 8–10 | ⚠️ Simplified |
-| Sec. V-C | Multi-source single-target + Fig. 11 | ✅ Full |
-| Sec. VI-A | Reshelving (3D MuJoCo kinematic analog) | ✅ Analog |
-| Sec. VI-B | Dressing → arm-pose following (3D analog) | ✅ Analog |
-| Sec. VI-C | Surface cleaning (3D SVGP, Figs. 15–16 analog) | ✅ Analog |
+| Sec. III-E | Linear transport via SVD (Eqs. 8–11) | ✅ Full |
+| Sec. III-E | Non-linear GP transportation (Eq. 12) | ✅ Full |
+| Sec. III-F | Velocity transport via Jacobian (Eq. 13) | ✅ Full |
+| Sec. III-G | Orientation + stiffness transport (Eqs. 14–15) | ✅ Full |
+| Sec. III-H | Uncertainty propagation (Eqs. 16–18) | ✅ Full |
+| Sec. IV-A | 2D surface cleaning comparison + Fig. 7 | ✅ Full |
+| Sec. IV-B | Multi-frame benchmark + Figs. 8–10 | ⚠️ Simplified |
+| Sec. IV-B | Multi-source single-target + Fig. 11 | ✅ Full |
+| Sec. V-A | Reshelving (3D MuJoCo kinematic analog) | ✅ Analog |
+| Sec. V-B | Dressing → arm-pose following (3D analog) | ✅ Analog |
+| Sec. V-C | Surface cleaning (3D SVGP, Figs. 15–16 analog) | ✅ Analog |
 
 **Simplifications:**
-- Sec. V-B: HMM-LQR replaced by greedy GMM rollout.
-- Sec. VI: Real Franka replaced by MuJoCo kinematic IK.
+- Sec. IV-B: HMM-LQR replaced by greedy GMM rollout.
+- Sec. V: Real Franka replaced by MuJoCo kinematic IK.
   No cloth simulation. Force via Hooke's law proxy.
   Cloud pairing via nearest-neighbour (not optimal transport).
 
@@ -110,7 +110,7 @@ pip install -e ".[dev]"
 
 ---
 
-## Reproduce all 2D figures (Secs. III–V)
+## Reproduce all 2D figures (Secs. III–IV)
 
 ```bash
 # Phase 1 — GP regression quality check
@@ -122,31 +122,31 @@ python scripts/smoke_phase2.py
 # → reports/figures/phase2_letter_C_field.png
 # → reports/figures/phase2_cleaning_demo.png
 
-# Fig. 3 (partial) — Linear transportation (Sec. IV-A)
+# Fig. 3 (partial) — Linear transportation (Sec. III-E)
 python scripts/figure3_linear.py --seed 0
 # → reports/figures/phase3_fig3_partial.png
 
-# Fig. 3 (full) — GP transportation (Sec. IV-B)
+# Fig. 3 (full) — GP transportation (Sec. III-E)
 python scripts/figure3_full.py --seed 0
 # → reports/figures/phase4_fig3_full.png
 
-# Fig. 5 — Transportation scheme (Sec. IV-C)
+# Fig. 5 — Transportation scheme (Sec. III-D)
 python scripts/figure5_scheme.py --seed 0
 # → reports/figures/phase4_fig5_scheme.png
 
-# Fig. 5 (with uncertainty) — Sec. IV-E
+# Fig. 5 (with uncertainty) — Sec. III-H
 python scripts/smoke_phase5.py
 # → reports/figures/phase5_fig5_full.png
 
-# Fig. 6 — Uncertainty propagation (Sec. IV-E)
+# Fig. 6 — Uncertainty propagation (Sec. III-H)
 python scripts/figure6_uncertainty.py --seed 0
 # → reports/figures/phase5_fig6_uncertainty.png
 
-# Fig. 7 — 2D surface cleaning comparison (Sec. V-A)
+# Fig. 7 — 2D surface cleaning comparison (Sec. IV-A)
 python scripts/figure7_cleaning_comparison.py --seed 0
 # → reports/figures/phase6_fig7_comparison.png
 
-# Figs. 8–10 — Multi-frame benchmark (Sec. V-B)
+# Figs. 8–10 — Multi-frame benchmark (Sec. IV-B)
 python scripts/run_multiframe_benchmark.py --seed 0 --n_reps 20
 python scripts/figure8_qualitative.py --seed 0
 # → reports/figures/phase7_fig8_qualitative.png
@@ -155,14 +155,14 @@ python scripts/figure9_boxplots.py --seed 0
 python scripts/figure10_test_boxplots.py --seed 0
 # → reports/figures/phase7_fig10_test_boxplots.png
 
-# Fig. 11 — Multi-source single-target (Sec. V-C)
+# Fig. 11 — Multi-source single-target (Sec. IV-B)
 python scripts/smoke_phase8.py --seed 0
 # → reports/figures/phase8_fig11_multisource.png
 ```
 
 ---
 
-## Reproduce 3D simulation figures (Sec. VI analogs)
+## Reproduce 3D simulation figures (Sec. V analogs)
 
 ```bash
 # Reshelving + arm-pose 3D rollout (Phase 9)
@@ -222,10 +222,10 @@ python scripts/smoke_all.py
 teach-once/
 ├── src/gpt_repro/
 │   ├── gp/          # Sec. III-B: GP regression (exact + SVGP)
-│   ├── transport/   # Sec. IV:    TP-GPT transportation math
+│   ├── transport/   # Sec. III:   TP-GPT transportation math
 │   ├── policies/    # Sec. III-A: DS learning, demo generators
-│   ├── baselines/   # Sec. V:     KMP, LE, E-RF, E-NN, E-NF, TP-GMM, HMM, DMP
-│   ├── metrics/     # Sec. V-B:   Fréchet, DTW, U-test ranking
+│   ├── baselines/   # Sec. IV:    KMP, LE, E-RF, E-NN, E-NF, TP-GMM, HMM, DMP
+│   ├── metrics/     # Sec. IV-B:  Fréchet, DTW, U-test ranking
 │   ├── viz/         # Figure utilities
 │   ├── envs/        # MuJoCo kinematic environments
 │   └── utils/       # Seeding, IO
