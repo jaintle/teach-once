@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Dark circular background -->
+  <circle cx="50" cy="50" r="49" fill="#0d0d0d"/>
+
+  <!-- Base plate -->
+  <rect x="32" y="84" width="36" height="8" rx="4" fill="#00d4ff"/>
+
+  <!-- Link 1 — vertical lower arm -->
+  <line x1="50" y1="84" x2="50" y2="60" stroke="#00d4ff" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- Shoulder joint ring -->
+  <circle cx="50" cy="60" r="7" fill="#0d0d0d" stroke="#00d4ff" stroke-width="3"/>
+
+  <!-- Link 2 — upper arm, angled left-up ~28° from vertical -->
+  <line x1="50" y1="60" x2="34" y2="34" stroke="#00d4ff" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Elbow joint ring -->
+  <circle cx="34" cy="34" r="6" fill="#0d0d0d" stroke="#00d4ff" stroke-width="3"/>
+
+  <!-- Link 3 — forearm, angled right-up -->
+  <line x1="34" y1="34" x2="55" y2="14" stroke="#00d4ff" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Wrist joint -->
+  <circle cx="55" cy="14" r="5" fill="#0d0d0d" stroke="#00d4ff" stroke-width="2.5"/>
+
+  <!-- Gripper finger A (left) -->
+  <line x1="55" y1="14" x2="48" y2="6" stroke="#00d4ff" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Gripper finger B (right) -->
+  <line x1="55" y1="14" x2="63" y2="6" stroke="#00d4ff" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Subtle glow ring -->
+  <circle cx="50" cy="50" r="48" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.25"/>
+</svg>

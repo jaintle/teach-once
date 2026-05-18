@@ -168,6 +168,14 @@ code, .mono {
   font-weight: 400;
   letter-spacing: 0.02em;
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.nav__logo {
+  flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .nav__wordmark:hover { opacity: 1; }
@@ -1660,7 +1668,9 @@ footer {
   font-size: 1.1rem;
   color: var(--accent);
   font-weight: 600;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   margin-bottom: var(--space-sm);
 }
 

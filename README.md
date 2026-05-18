@@ -4,6 +4,8 @@
 
 **Show a robot a task once. TP-GPT generalizes it everywhere.**
 
+<img src="docs/assets/static/image.png" alt="TP-GPT interactive demo — Franka arm generalizing pick-and-place from a single demonstration" width="720">
+
 [![Live Demo](https://img.shields.io/badge/demo-live-00d4ff?style=flat-square&logo=googlechrome&logoColor=white)](https://jaintle.github.io/teach-once/)
 [![Paper](https://img.shields.io/badge/arXiv-2404.13458-b31b1b?style=flat-square)](https://arxiv.org/abs/2404.13458)
 [![Paper Video](https://img.shields.io/badge/video-YouTube-ff0000?style=flat-square&logo=youtube)](https://youtu.be/bE6uOnAQBLo)
@@ -215,6 +217,8 @@ python scripts/smoke_all.py
 ---
 
 ## Directory structure
+
+```text
 teach-once/
 ├── src/gpt_repro/
 │   ├── gp/          # Sec. III-B: GP regression (exact + SVGP)
@@ -244,10 +248,11 @@ teach-once/
 │       ├── figures/          # 2D paper reproduction figures
 │       └── models/           # Three.js geometry
 └── reports/
-├── figures/              # All reproduced figures (PNG)
-├── results/              # CSV/NPZ numerical results
-├── REPORT.md             # Technical report
-├── FIGURE_INDEX.md       # Figure → script → paper mapping
+    ├── figures/              # All reproduced figures (PNG)
+    ├── results/              # CSV/NPZ numerical results
+    ├── REPORT.md             # Technical report
+    └── FIGURE_INDEX.md       # Figure → script → paper mapping
+```
 
 ---
 
